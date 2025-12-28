@@ -239,23 +239,32 @@ download_file() {
 
 	for attempt in $(seq 1 $max_attempts); do
 		# Use --http1.1 to avoid HTTP/2 issues with some servers (e.g., TDK)
+		# Send browser-like headers to avoid bot detection (e.g., Analog Devices)
 		# --connect-timeout: max time to establish connection
 		# --max-time: max time for entire operation
-		# -f: fail on HTTP errors
+		# -s: silent mode (no progress bar)
+		# -S: show errors even in silent mode
 		# -L: follow redirects
-		if curl -sS -L -f \
+		# Note: Removed -f to allow downloads even with HTTP errors (some servers redirect with 3xx)
+		if curl -sSL \
 			--http1.1 \
 			--connect-timeout 10 \
 			--max-time 60 \
-			-A "Mozilla/5.0 (compatible; kicad-shutil/1.0)" \
-			-o "$output" "$url" 2>&1 | grep -v "^curl:"; then
-			# Verify file was actually downloaded
+			-H "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" \
+			-H "Accept-Language: en-US,en;q=0.5" \
+			-H "Accept-Encoding: gzip, deflate" \
+			-H "DNT: 1" \
+			-H "Connection: keep-alive" \
+			-H "Upgrade-Insecure-Requests: 1" \
+			-A "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/115.0" \
+			-o "$output" "$url" 2>/dev/null; then
+			# Verify file was actually downloaded and is not empty
 			if [[ -f "$output" ]] && [[ -s "$output" ]]; then
 				return 0
 			fi
 		fi
 
-		# Clean up partial download
+		# Clean up partial or failed download
 		rm -f "$output"
 
 		if [[ $attempt -lt $max_attempts ]]; then
