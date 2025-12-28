@@ -1,0 +1,106 @@
+# ============================================
+# GitHub Actions Workflow for kicad-shutil
+# ============================================
+# This workflow automatically runs tests when code is pushed or a PR is created.
+
+# Workflow name (displayed in the GitHub Actions tab)
+name: CI Tests
+
+# Trigger: when to run this workflow
+on:
+  push:
+    branches:
+      - main        # On push to main branch
+  pull_request:
+    branches:
+      - main        # On PR to main branch
+
+# Job definitions
+jobs:
+  # Job 1: Run tests on multiple operating systems
+  test:
+    # Display name for this job
+    name: Run tests on ${{ matrix.os }}
+
+    # Matrix strategy: run tests in parallel on multiple OSes
+    strategy:
+      # Continue running other jobs even if one fails
+      fail-fast: false
+      matrix:
+        # List of operating systems to test on
+        os: [ubuntu-latest, macos-latest]
+
+    # Specify the runner environment
+    runs-on: ${{ matrix.os }}
+
+    # Steps to execute in this job
+    steps:
+      # Step 1: Check out the repository code
+      # actions/checkout@v4 is an official GitHub action
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # Fetch submodules recursively (for shunit2)
+          submodules: recursive
+
+      # Step 2: Grant execute permission to kicad-shutil
+      - name: Make kicad-shutil executable
+        run: chmod +x ./kicad-shutil
+
+      # Step 3: Run unit tests
+      - name: Run unit tests
+        run: ./test/run_tests.sh
+
+      # Step 4: Upload test logs if tests fail
+      - name: Upload test logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs-${{ matrix.os }}
+          path: |
+            ./test/output/
+          retention-days: 7
+
+  # Job 2: Code quality checks
+  code-quality:
+    name: Code quality checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      # Install shellcheck and shfmt
+      - name: Install code quality tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+
+          # Install shfmt
+          SHFMT_VERSION="3.8.0"
+          wget -qO- "https://github.com/mvdan/sh/releases/download/v${SHFMT_VERSION}/shfmt_v${SHFMT_VERSION}_linux_amd64" -O /tmp/shfmt
+          sudo install /tmp/shfmt /usr/local/bin/shfmt
+          rm /tmp/shfmt
+
+      # Run shellcheck on all shell scripts
+      - name: Run shellcheck
+        run: |
+          echo "Running shellcheck on main scripts..."
+          shellcheck ./kicad-shutil
+          shellcheck ./lib/*.sh
+          find ./test -name "*.sh" -not -path "./test/shunit2/*" -print0 | xargs -0 shellcheck
+          echo "Shellcheck passed!"
+
+      # Check shell script formatting with shfmt
+      - name: Check formatting with shfmt
+        run: |
+          echo "Checking shell script formatting..."
+          # Check formatting (exit code 1 if formatting is needed)
+          # Exclude shunit2 submodule from formatting checks
+          shfmt -d -ci -bn \
+            ./kicad-shutil \
+            $(find ./lib -name "*.sh") \
+            $(find ./test -name "*.sh" -not -path "./test/shunit2/*")
+          echo "Formatting check passed!"
