@@ -1,0 +1,280 @@
+#!/usr/bin/env bash
+
+# kicad-shutil - KiCad Symbol Helper Utilities
+# Manage KiCad symbol library metadata: DigiKey integration, datasheet validation, bulk downloads
+
+set -uo pipefail
+
+# Script directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LIB_DIR="$SCRIPT_DIR/lib"
+CACHE_DIR="$SCRIPT_DIR/cache"
+
+# Source library modules
+source "$LIB_DIR/utils.sh"
+source "$LIB_DIR/parser.sh"
+source "$LIB_DIR/writer.sh"
+
+# Global options
+OPT_UPDATE_DIGIKEY=false
+OPT_DELETE_DIGIKEY=false
+OPT_VERIFY=false
+OPT_DOWNLOAD_DATASHEETS=false
+DATASHEET_DIR="./datasheets"
+FILES=()
+
+# Usage information
+usage() {
+	cat <<EOF
+Usage: kicad-shutil [OPTIONS] <file.kicad_sym> [<file2.kicad_sym> ...]
+       kicad-shutil [OPTIONS] <sym-lib-table> [<fp-lib-table>]
+
+KiCad Helper Utilities
+
+Supported file types:
+  • .kicad_sym files (symbol libraries) - all operations
+  • sym-lib-table, fp-lib-table - verification only
+
+If no operation is specified, defaults to --verify.
+
+OPTIONS:
+    -u, --update-digikey-info   Add/update DigiKey part numbers, URLs, and metadata
+    -d, --delete-digikey-info   Remove all DigiKey metadata from symbols
+    -v, --verify                Validate footprints, datasheets, and show detailed report
+    -D, --download-datasheets   Download all datasheets (use --to <dir> to specify directory)
+    -h, --help                  Show this help message
+
+EXAMPLES:
+    # Verify (default operation when no option specified)
+    $0 pmic.kicad_sym
+    $0 -v pmic.kicad_sym
+
+    # Add/update DigiKey info (interactive mode)
+    $0 --update-digikey-info pmic.kicad_sym
+    $0 -u pmic.kicad_sym
+
+    # Remove all DigiKey metadata
+    $0 --delete-digikey-info pmic.kicad_sym
+    $0 -d pmic.kicad_sym
+
+    # Download datasheets to specific directory
+    $0 -D *.kicad_sym --to ~/datasheets
+    $0 --download-datasheets *.kicad_sym -t ~/datasheets
+
+EOF
+	exit 0
+}
+
+# Parse command line arguments
+parse_args() {
+	if [[ $# -eq 0 ]]; then
+		usage
+	fi
+
+	while [[ $# -gt 0 ]]; do
+		case "$1" in
+			-u | --update-digikey-info)
+				OPT_UPDATE_DIGIKEY=true
+				shift
+				;;
+			-d | --delete-digikey-info)
+				OPT_DELETE_DIGIKEY=true
+				shift
+				;;
+			-v | --verify)
+				OPT_VERIFY=true
+				shift
+				;;
+			-D | --download-datasheets)
+				OPT_DOWNLOAD_DATASHEETS=true
+				shift
+				;;
+			-t | --to)
+				DATASHEET_DIR="$2"
+				shift 2
+				;;
+			-h | --help)
+				usage
+				;;
+			-*)
+				error "Unknown option: $1"
+				usage
+				;;
+			*)
+				FILES+=("$1")
+				shift
+				;;
+		esac
+	done
+
+	# Validate: at least one file and one operation
+	if [[ ${#FILES[@]} -eq 0 ]]; then
+		error "No input files specified"
+		exit 1
+	fi
+
+	# If no operation specified, default to --verify
+	if ! $OPT_UPDATE_DIGIKEY && ! $OPT_DELETE_DIGIKEY && ! $OPT_VERIFY && ! $OPT_DOWNLOAD_DATASHEETS; then
+		info "No operation specified, defaulting to --verify"
+		OPT_VERIFY=true
+	fi
+
+	# Validate: can't use both update and delete at the same time
+	if $OPT_UPDATE_DIGIKEY && $OPT_DELETE_DIGIKEY; then
+		error "Cannot use --update-digikey-info and --delete-digikey-info together"
+		exit 1
+	fi
+
+	# Expand glob patterns and validate files
+	local expanded_files=()
+	for pattern in "${FILES[@]}"; do
+		if [[ -f "$pattern" ]]; then
+			expanded_files+=("$pattern")
+		else
+			# Try glob expansion
+			local matches=($pattern)
+			if [[ -e "${matches[0]}" ]]; then
+				expanded_files+=("${matches[@]}")
+			else
+				warn "File not found: $pattern"
+			fi
+		fi
+	done
+
+	FILES=("${expanded_files[@]}")
+
+	if [[ ${#FILES[@]} -eq 0 ]]; then
+		error "No valid .kicad_sym files found"
+		exit 1
+	fi
+}
+
+# Main processing loop
+main() {
+	parse_args "$@"
+
+	# Initialize utilities
+	init_utils
+
+	info "kicad-shutil - Processing ${#FILES[@]} file(s)"
+	echo
+
+	# Initialize cache directory
+	mkdir -p "$CACHE_DIR"
+
+	# Initialize verify if needed
+	if $OPT_VERIFY; then
+		source "$LIB_DIR/verify.sh"
+		init_verify_stats
+	fi
+
+	# Initialize datasheet if needed
+	if $OPT_DOWNLOAD_DATASHEETS; then
+		source "$LIB_DIR/datasheet.sh"
+		init_datasheet_stats
+		export DATASHEET_DIR
+	fi
+
+	# Initialize DigiKey if needed
+	if $OPT_UPDATE_DIGIKEY || $OPT_DELETE_DIGIKEY; then
+		source "$LIB_DIR/digikey.sh"
+	fi
+
+	# Process each file
+	for file in "${FILES[@]}"; do
+		if [[ ! -f "$file" ]]; then
+			warn "Skipping non-existent file: $file"
+			continue
+		fi
+
+		local filename=$(basename "$file")
+
+		# Check file type
+		if [[ "$filename" == "sym-lib-table" || "$filename" == "fp-lib-table" ]]; then
+			# Library table files - only verification is supported
+			if $OPT_VERIFY; then
+				process_table_file "$file"
+			else
+				warn "Skipping $filename: Only --verify is supported for library tables"
+			fi
+		elif [[ "$file" =~ \.kicad_sym$ ]]; then
+			# Symbol library file - all operations supported
+			process_file "$file"
+		else
+			warn "Skipping unsupported file: $file"
+			continue
+		fi
+	done
+
+	# Print verification report at the end
+	if $OPT_VERIFY; then
+		print_verify_report
+	fi
+
+	# Print datasheet download summary
+	if $OPT_DOWNLOAD_DATASHEETS; then
+		print_datasheet_summary
+	fi
+
+	echo
+	info "Processing complete"
+}
+
+# Process a library table file (sym-lib-table or fp-lib-table)
+process_table_file() {
+	local file="$1"
+	local filename=$(basename "$file")
+
+	info "Processing: $filename"
+
+	# Library tables don't need symbols_data, pass empty string
+	verify_file "$file" ""
+}
+
+# Process a single .kicad_sym file
+process_file() {
+	local file="$1"
+	local filename=$(basename "$file")
+	local category="${filename%.kicad_sym}"
+
+	# Don't print info messages in TSV mode
+	if [[ "${OUTPUT_TSV:-false}" != "true" ]]; then
+		info "Processing: $filename"
+	fi
+
+	# Parse all symbols in the file
+	local symbols_data=$(parse_file "$file")
+
+	if [[ -z "$symbols_data" ]]; then
+		if [[ "${OUTPUT_TSV:-false}" != "true" ]]; then
+			warn "  No symbols found in $filename"
+		fi
+		return
+	fi
+
+	# Count symbols
+	local symbol_count=$(echo "$symbols_data" | grep -c "^SYMBOL|" || true)
+	if [[ "${OUTPUT_TSV:-false}" != "true" ]]; then
+		info "  Found $symbol_count symbol(s)"
+	fi
+
+	# Process based on options
+	if $OPT_VERIFY; then
+		verify_file "$file" "$symbols_data"
+	fi
+
+	if $OPT_DOWNLOAD_DATASHEETS; then
+		download_datasheets "$file" "$symbols_data" "$category"
+	fi
+
+	if $OPT_UPDATE_DIGIKEY; then
+		process_digikey "$file" "$symbols_data"
+	fi
+
+	if $OPT_DELETE_DIGIKEY; then
+		delete_digikey_info "$file" "$symbols_data"
+	fi
+}
+
+# Run main
+main "$@"
