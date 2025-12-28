@@ -40,6 +40,18 @@ success() {
 #        ... do work ...
 #        stop_spinner
 SPINNER_PID=""
+
+# Cleanup function to stop spinner and restore terminal
+cleanup_spinner() {
+	if [[ -n "$SPINNER_PID" ]]; then
+		kill "$SPINNER_PID" 2>/dev/null || true
+		wait "$SPINNER_PID" 2>/dev/null || true
+		SPINNER_PID=""
+		# Clear spinner character and newline
+		printf "\b \b\n" >&2
+	fi
+}
+
 start_spinner() {
 	local message="${1:-Working...}"
 	local spinner_chars="⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
@@ -429,4 +441,7 @@ validate_datasheet_url() {
 # Initialize utilities (called from main script)
 init_utils() {
 	check_dependencies
+
+	# Setup signal handlers to cleanup spinner on interrupt
+	trap cleanup_spinner INT TERM EXIT
 }
