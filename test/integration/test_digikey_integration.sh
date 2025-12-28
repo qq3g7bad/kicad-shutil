@@ -22,51 +22,51 @@ COLOR_RESET=""
 # Test Setup
 #-----------------------------------
 oneTimeSetUp() {
-    # Check if DigiKey credentials are available
-    if [[ -z "$DIGIKEY_CLIENT_ID" ]] || [[ -z "$DIGIKEY_CLIENT_SECRET" ]]; then
-        echo "SKIP: DigiKey credentials not configured"
-        echo "Set DIGIKEY_CLIENT_ID and DIGIKEY_CLIENT_SECRET to run integration tests"
-        startSkipping
-    fi
-    
-    # Check if DigiKey functions are available
-    if ! declare -f digikey_search >/dev/null; then
-        echo "SKIP: DigiKey module not available"
-        startSkipping
-    fi
+	# Check if DigiKey credentials are available
+	if [[ -z "$DIGIKEY_CLIENT_ID" ]] || [[ -z "$DIGIKEY_CLIENT_SECRET" ]]; then
+		echo "SKIP: DigiKey credentials not configured"
+		echo "Set DIGIKEY_CLIENT_ID and DIGIKEY_CLIENT_SECRET to run integration tests"
+		startSkipping
+	fi
+
+	# Check if DigiKey functions are available
+	if ! declare -f digikey_search >/dev/null; then
+		echo "SKIP: DigiKey module not available"
+		startSkipping
+	fi
 }
 
 #-----------------------------------
 # Test: DigiKey token acquisition
 #-----------------------------------
 testDigiKeyToken() {
-    if ! declare -f digikey_get_token >/dev/null; then
-        startSkipping
-        return
-    fi
-    
-    local token
-    token=$(digikey_get_token)
-    
-    assertNotNull "Token should not be null" "$token"
-    assertTrue "Token should be non-empty" "[ -n '$token' ]"
+	if ! declare -f digikey_get_token >/dev/null; then
+		startSkipping
+		return
+	fi
+
+	local token
+	token=$(digikey_get_token)
+
+	assertNotNull "Token should not be null" "$token"
+	assertTrue "Token should be non-empty" "[ -n '$token' ]"
 }
 
 #-----------------------------------
 # Test: DigiKey search for known part
 #-----------------------------------
 testDigiKeySearch() {
-    if ! declare -f digikey_search >/dev/null; then
-        startSkipping
-        return
-    fi
-    
-    # Search for a common part
-    local results
-    results=$(digikey_search "LM358")
-    
-    assertNotNull "Search results should not be null" "$results"
-    assertContains "Should find LM358 related parts" "$results" "LM358"
+	if ! declare -f digikey_search >/dev/null; then
+		startSkipping
+		return
+	fi
+
+	# Search for a common part
+	local results
+	results=$(digikey_search "LM358")
+
+	assertNotNull "Search results should not be null" "$results"
+	assertContains "Should find LM358 related parts" "$results" "LM358"
 }
 
 #-----------------------------------

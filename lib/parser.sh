@@ -10,14 +10,14 @@
 #   PROP|...
 #   SYMBOL|next_symbol|...
 parse_file() {
-    local file="$1"
+	local file="$1"
 
-    if [[ ! -f "$file" ]]; then
-        error "File not found: $file"
-        return 1
-    fi
+	if [[ ! -f "$file" ]]; then
+		error "File not found: $file"
+		return 1
+	fi
 
-    awk '
+	awk '
     BEGIN {
         in_symbol = 0
         symbol_depth = 0
@@ -126,12 +126,12 @@ parse_file() {
 # Get property value for a specific symbol
 # Usage: get_property <symbols_data> <symbol_name> <property_name>
 get_property() {
-    local symbols_data="$1"
-    local symbol_name="$2"
-    local property_name="$3"
+	local symbols_data="$1"
+	local symbol_name="$2"
+	local property_name="$3"
 
-    # Extract properties for the given symbol
-    echo "$symbols_data" | awk -F'|' -v sym="$symbol_name" -v prop="$property_name" '
+	# Extract properties for the given symbol
+	echo "$symbols_data" | awk -F'|' -v sym="$symbol_name" -v prop="$property_name" '
         $1 == "SYMBOL" && $2 == sym { in_symbol = 1; next }
         $1 == "SYMBOL" && $2 != sym { in_symbol = 0 }
         in_symbol && $1 == "PROP" && $2 == prop { print $3; exit }
@@ -141,10 +141,10 @@ get_property() {
 # Get all properties for a symbol
 # Output: property_name|property_value|line_number (one per line)
 get_all_properties() {
-    local symbols_data="$1"
-    local symbol_name="$2"
+	local symbols_data="$1"
+	local symbol_name="$2"
 
-    echo "$symbols_data" | awk -F'|' -v sym="$symbol_name" '
+	echo "$symbols_data" | awk -F'|' -v sym="$symbol_name" '
         $1 == "SYMBOL" && $2 == sym { in_symbol = 1; next }
         $1 == "SYMBOL" && $2 != sym { in_symbol = 0 }
         in_symbol && $1 == "PROP" { print $2 "|" $3 "|" $4 }
@@ -154,59 +154,59 @@ get_all_properties() {
 # Get symbol metadata (start_line, props_end_line)
 # Output: start_line|props_end_line
 get_symbol_metadata() {
-    local symbols_data="$1"
-    local symbol_name="$2"
+	local symbols_data="$1"
+	local symbol_name="$2"
 
-    echo "$symbols_data" | awk -F'|' -v sym="$symbol_name" '
+	echo "$symbols_data" | awk -F'|' -v sym="$symbol_name" '
         $1 == "SYMBOL" && $2 == sym { print $3 "|" $4; exit }
     '
 }
 
 # List all symbol names in the file
 list_symbols() {
-    local symbols_data="$1"
+	local symbols_data="$1"
 
-    echo "$symbols_data" | awk -F'|' '
+	echo "$symbols_data" | awk -F'|' '
         $1 == "SYMBOL" { print $2 }
     '
 }
 
 # Count symbols in the parsed data
 count_symbols() {
-    local symbols_data="$1"
+	local symbols_data="$1"
 
-    echo "$symbols_data" | grep -c "^SYMBOL|" || echo "0"
+	echo "$symbols_data" | grep -c "^SYMBOL|" || echo "0"
 }
 
 # Check if a property exists for a symbol
 # Returns 0 if exists, 1 if not
 has_property() {
-    local symbols_data="$1"
-    local symbol_name="$2"
-    local property_name="$3"
+	local symbols_data="$1"
+	local symbol_name="$2"
+	local property_name="$3"
 
-    local value=$(get_property "$symbols_data" "$symbol_name" "$property_name")
-    [[ -n "$value" ]]
+	local value=$(get_property "$symbols_data" "$symbol_name" "$property_name")
+	[[ -n "$value" ]]
 }
 
 # Parse symbols and print human-readable summary (for debugging)
 print_symbols_summary() {
-    local symbols_data="$1"
+	local symbols_data="$1"
 
-    local symbols=$(list_symbols "$symbols_data")
-    local count=$(count_symbols "$symbols_data")
+	local symbols=$(list_symbols "$symbols_data")
+	local count=$(count_symbols "$symbols_data")
 
-    echo "Found $count symbol(s):"
-    echo
+	echo "Found $count symbol(s):"
+	echo
 
-    while IFS= read -r symbol; do
-        echo "Symbol: $symbol"
+	while IFS= read -r symbol; do
+		echo "Symbol: $symbol"
 
-        local props=$(get_all_properties "$symbols_data" "$symbol")
-        while IFS='|' read -r prop_name prop_value prop_line; do
-            printf "  %-20s = %s (line %s)\n" "$prop_name" "$prop_value" "$prop_line"
-        done <<< "$props"
+		local props=$(get_all_properties "$symbols_data" "$symbol")
+		while IFS='|' read -r prop_name prop_value prop_line; do
+			printf "  %-20s = %s (line %s)\n" "$prop_name" "$prop_value" "$prop_line"
+		done <<<"$props"
 
-        echo
-    done <<< "$symbols"
+		echo
+	done <<<"$symbols"
 }
