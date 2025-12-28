@@ -1,0 +1,13 @@
+# kicad-shutil configuration file
+# Copy this file to ~/.kicad-shutil/config and fill in your credentials
+
+# DigiKey API credentials
+# Get yours at: https://developer.digikey.com/
+DIGIKEY_CLIENT_ID="your-client-id-here"
+DIGIKEY_CLIENT_SECRET="your-client-secret-here"
+
+# Optional: Custom cache directory
+# CACHE_DIR="/tmp/kicad-shutil-cache"
+
+# Optional: Custom output directory for datasheets
+# OUTPUT_DIR="$HOME/Documents/datasheets"

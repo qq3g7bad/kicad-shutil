@@ -1,0 +1,22 @@
+# Cache files
+cache/
+*.cache
+
+# Backup files
+*.bak
+
+# Config files with credentials
+config
+.kicad-shutil/
+
+# Downloaded datasheets (optional - remove this line if you want to commit them)
+../datasheets/
+
+# Test fixtures (generated during tests)
+test/fixtures/*.bak
+test/fixtures/test_write_*.kicad_sym
+test/fixtures/test_validate_*.kicad_sym
+
+# Temporary files
+*.tmp
+*.tmp.*
