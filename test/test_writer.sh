@@ -8,17 +8,17 @@ LIB_DIR="$SCRIPT_DIR/lib"
 TEST_DIR="$(dirname "${BASH_SOURCE[0]}")"
 FIXTURES_DIR="$TEST_DIR/fixtures"
 
+# Disable color output (must be set before sourcing)
+export COLOR_RED=""
+export COLOR_GREEN=""
+export COLOR_YELLOW=""
+export COLOR_BLUE=""
+export COLOR_RESET=""
+
 # Source dependencies
 source "$LIB_DIR/utils.sh"
 source "$LIB_DIR/parser.sh"
 source "$LIB_DIR/writer.sh"
-
-# Disable color output
-COLOR_RED=""
-COLOR_GREEN=""
-COLOR_YELLOW=""
-COLOR_BLUE=""
-COLOR_RESET=""
 
 #-----------------------------------
 # Test Setup

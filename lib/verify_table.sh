@@ -2,9 +2,42 @@
 
 # verify_table.sh - Library table verification (sym-lib-table, fp-lib-table)
 
-# Global variables for KiCad environment
-declare -A KICAD_ENV
-declare KICAD_ENV_LOADED=""
+# Global variables for KiCad environment (bash 3.2 compatible - no associative arrays)
+# Store as newline-separated KEY=VALUE pairs
+KICAD_ENV=""
+KICAD_ENV_LOADED=""
+
+# Helper: Set a KiCad environment variable
+# Usage: kicad_env_set KEY VALUE
+kicad_env_set() {
+	local key="$1"
+	local value="$2"
+	# Remove existing entry if present
+	KICAD_ENV=$(echo "$KICAD_ENV" | grep -v "^${key}=" || true)
+	# Add new entry
+	if [[ -n "$KICAD_ENV" ]]; then
+		KICAD_ENV="${KICAD_ENV}"$'\n'"${key}=${value}"
+	else
+		KICAD_ENV="${key}=${value}"
+	fi
+}
+
+# Helper: Get a KiCad environment variable
+# Usage: kicad_env_get KEY
+kicad_env_get() {
+	local key="$1"
+	echo "$KICAD_ENV" | grep "^${key}=" | head -n 1 | cut -d= -f2-
+}
+
+# Helper: Count KiCad environment variables
+# Usage: kicad_env_count
+kicad_env_count() {
+	if [[ -z "$KICAD_ENV" ]]; then
+		echo "0"
+	else
+		echo "$KICAD_ENV" | grep -c "^" || echo "0"
+	fi
+}
 
 # Verify a library table file
 # Usage: verify_table_file <table_file> <table_type>
@@ -21,10 +54,12 @@ verify_table_file() {
 	info "Verifying $table_type library table: $(basename "$table_file")"
 
 	# Read and parse the table
-	local table_content=$(cat "$table_file")
+	local table_content
+	table_content=$(cat "$table_file")
 
 	# Extract library entries
-	local entries=$(echo "$table_content" | grep -oP '\(lib\s+\(name\s+"[^"]+"\).*?\)(?=\s*\(lib|\s*\)$)')
+	local entries
+	entries=$(echo "$table_content" | grep -oP '\(lib\s+\(name\s+"[^"]+"\).*?\)(?=\s*\(lib|\s*\)$)')
 
 	if [[ -z "$entries" ]]; then
 		warn "No library entries found in $table_file"
@@ -46,8 +81,10 @@ verify_table_file() {
 		((total++))
 
 		# Extract library properties
-		local lib_name=$(echo "$entry" | grep -oP '\(name\s+"\K[^"]+')
-		local lib_uri=$(echo "$entry" | grep -oP '\(uri\s+"\K[^"]+')
+		local lib_name
+		lib_name=$(echo "$entry" | grep -oP '\(name\s+"\K[^"]+')
+		local lib_uri
+		lib_uri=$(echo "$entry" | grep -oP '\(uri\s+"\K[^"]+')
 
 		if [[ -z "$lib_uri" ]]; then
 			warn "  ⚠ $lib_name: No URI specified"
@@ -56,7 +93,8 @@ verify_table_file() {
 		fi
 
 		# Resolve environment variables in URI
-		local resolved_uri=$(resolve_kicad_path "$lib_uri")
+		local resolved_uri
+		resolved_uri=$(resolve_kicad_path "$lib_uri")
 
 		if [[ -z "$resolved_uri" ]]; then
 			error "  ✗ $lib_name: Could not resolve URI: $lib_uri"
@@ -119,7 +157,8 @@ resolve_kicad_path() {
 	local resolved="$path"
 
 	# Extract all ${VAR} patterns
-	local vars=$(echo "$path" | grep -oP '\$\{[^}]+\}' | sort -u)
+	local vars
+	vars=$(echo "$path" | grep -oP '\$\{[^}]+\}' | sort -u)
 
 	for var_expr in $vars; do
 		# Remove ${ and }
@@ -137,7 +176,7 @@ resolve_kicad_path() {
 
 		if [[ -z "$var_value" ]]; then
 			# Try to get from KiCad environment
-			var_value="${KICAD_ENV[$var_name]:-}"
+			var_value="$(kicad_env_get "$var_name")"
 		fi
 
 		if [[ -n "$var_value" ]]; then
@@ -199,24 +238,25 @@ load_kicad_environment() {
 
 	# Set standard KiCad environment variables
 	if [[ -n "$symbol_dir" ]]; then
-		KICAD_ENV[KICAD7_SYMBOL_DIR]="$symbol_dir"
-		KICAD_ENV[KICAD_SYMBOL_DIR]="$symbol_dir" # v6 compat
+		kicad_env_set "KICAD7_SYMBOL_DIR" "$symbol_dir"
+		kicad_env_set "KICAD_SYMBOL_DIR" "$symbol_dir" # v6 compat
 	fi
 
 	if [[ -n "$footprint_dir" ]]; then
-		KICAD_ENV[KICAD7_FOOTPRINT_DIR]="$footprint_dir"
-		KICAD_ENV[KICAD_FOOTPRINT_DIR]="$footprint_dir" # v6 compat
+		kicad_env_set "KICAD7_FOOTPRINT_DIR" "$footprint_dir"
+		kicad_env_set "KICAD_FOOTPRINT_DIR" "$footprint_dir" # v6 compat
 	fi
 
 	if [[ -n "$model_3d_dir" ]]; then
-		KICAD_ENV[KICAD7_3DMODEL_DIR]="$model_3d_dir"
-		KICAD_ENV[KICAD_3DMODEL_DIR]="$model_3d_dir" # v6 compat
+		kicad_env_set "KICAD7_3DMODEL_DIR" "$model_3d_dir"
+		kicad_env_set "KICAD_3DMODEL_DIR" "$model_3d_dir" # v6 compat
 	fi
 
 	# Parse custom variables from kicad_common.json if it exists
 	if [[ -f "$config_file" ]]; then
 		# Get custom vars from environment.vars section
-		local custom_vars=$(grep -A 100 '"environment"' "$config_file" \
+		local custom_vars
+		custom_vars=$(grep -A 100 '"environment"' "$config_file" \
 			| grep -A 50 '"vars"' \
 			| grep -oP '"\K[^"]+(?="\s*:\s*")' || true)
 
@@ -227,12 +267,13 @@ load_kicad_environment() {
 			fi
 
 			# Extract value
-			local var_value=$(grep -A 100 '"environment"' "$config_file" \
+			local var_value
+			var_value=$(grep -A 100 '"environment"' "$config_file" \
 				| grep -A 50 '"vars"' \
 				| grep -oP "\"$var_name\"\s*:\s*\"\K[^\"]+")
 
 			if [[ -n "$var_value" ]]; then
-				KICAD_ENV[$var_name]="$var_value"
+				kicad_env_set "$var_name" "$var_value"
 			fi
 		done <<<"$custom_vars"
 	else
@@ -243,23 +284,28 @@ load_kicad_environment() {
 	for var in KICAD7_SYMBOL_DIR KICAD7_FOOTPRINT_DIR KICAD7_3DMODEL_DIR \
 		KIPRJMOD KICAD_USER_TEMPLATE_DIR; do
 		if [[ -n "${!var:-}" ]]; then
-			KICAD_ENV[$var]="${!var}"
+			kicad_env_set "$var" "${!var}"
 		fi
 	done
 
 	KICAD_ENV_LOADED="1"
 
 	# Debug: show loaded environment (only on first load)
-	local var_count=${#KICAD_ENV[@]}
+	local var_count
+	var_count=$(kicad_env_count)
 	if [[ $var_count -gt 0 ]]; then
 		# Show key paths  (suppress repeated messages by checking if already shown)
 		if [[ -z "${_KICAD_ENV_SHOWN:-}" ]]; then
 			info "Loaded $var_count KiCad environment variables"
-			if [[ -n "${KICAD_ENV[KICAD7_SYMBOL_DIR]:-}" ]]; then
-				info "  KICAD7_SYMBOL_DIR=${KICAD_ENV[KICAD7_SYMBOL_DIR]}"
+			local symbol_dir_val
+			symbol_dir_val=$(kicad_env_get "KICAD7_SYMBOL_DIR")
+			if [[ -n "$symbol_dir_val" ]]; then
+				info "  KICAD7_SYMBOL_DIR=$symbol_dir_val"
 			fi
-			if [[ -n "${KICAD_ENV[KICAD7_FOOTPRINT_DIR]:-}" ]]; then
-				info "  KICAD7_FOOTPRINT_DIR=${KICAD_ENV[KICAD7_FOOTPRINT_DIR]}"
+			local footprint_dir_val
+			footprint_dir_val=$(kicad_env_get "KICAD7_FOOTPRINT_DIR")
+			if [[ -n "$footprint_dir_val" ]]; then
+				info "  KICAD7_FOOTPRINT_DIR=$footprint_dir_val"
 			fi
 			export _KICAD_ENV_SHOWN="1"
 		fi

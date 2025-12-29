@@ -1,22 +1,24 @@
 #!/usr/bin/env bash
 
 # Unit tests for lib/digikey.sh
+# shellcheck disable=SC2155  # Declare and assign separately - not critical in tests
 
 # Setup test environment
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LIB_DIR="$SCRIPT_DIR/lib"
+# shellcheck disable=SC2034  # TEST_DIR may be used in future tests
 TEST_DIR="$(dirname "${BASH_SOURCE[0]}")"
+
+# Disable color output (must be set before sourcing)
+export COLOR_RED=""
+export COLOR_GREEN=""
+export COLOR_YELLOW=""
+export COLOR_BLUE=""
+export COLOR_RESET=""
 
 # Source dependencies
 source "$LIB_DIR/utils.sh"
 source "$LIB_DIR/digikey.sh"
-
-# Disable color output for consistent test results
-COLOR_RED=""
-COLOR_GREEN=""
-COLOR_YELLOW=""
-COLOR_BLUE=""
-COLOR_RESET=""
 
 # Mock spinner functions
 start_spinner() { :; }

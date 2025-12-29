@@ -131,9 +131,13 @@ parse_args() {
 		if [[ -f "$pattern" ]]; then
 			expanded_files+=("$pattern")
 		else
-			# Try glob expansion
-			local matches=($pattern)
-			if [[ -e "${matches[0]}" ]]; then
+			# Try glob expansion with nullglob to avoid literal pattern if no match
+			shopt -s nullglob
+			local -a matches
+			# shellcheck disable=SC2206
+			matches=($pattern) # Intentionally unquoted for glob expansion
+			shopt -u nullglob
+			if [[ ${#matches[@]} -gt 0 ]]; then
 				expanded_files+=("${matches[@]}")
 			else
 				warn "File not found: $pattern"
@@ -187,7 +191,8 @@ main() {
 			continue
 		fi
 
-		local filename=$(basename "$file")
+		local filename
+		filename=$(basename "$file")
 
 		# Check file type
 		if [[ "$filename" == "sym-lib-table" || "$filename" == "fp-lib-table" ]]; then
@@ -223,7 +228,8 @@ main() {
 # Process a library table file (sym-lib-table or fp-lib-table)
 process_table_file() {
 	local file="$1"
-	local filename=$(basename "$file")
+	local filename
+	filename=$(basename "$file")
 
 	info "Processing: $filename"
 
@@ -234,7 +240,8 @@ process_table_file() {
 # Process a single .kicad_sym file
 process_file() {
 	local file="$1"
-	local filename=$(basename "$file")
+	local filename
+	filename=$(basename "$file")
 	local category="${filename%.kicad_sym}"
 
 	# Don't print info messages in TSV mode
@@ -243,7 +250,8 @@ process_file() {
 	fi
 
 	# Parse all symbols in the file
-	local symbols_data=$(parse_file "$file")
+	local symbols_data
+	symbols_data=$(parse_file "$file")
 
 	if [[ -z "$symbols_data" ]]; then
 		if [[ "${OUTPUT_TSV:-false}" != "true" ]]; then
@@ -253,7 +261,8 @@ process_file() {
 	fi
 
 	# Count symbols
-	local symbol_count=$(echo "$symbols_data" | grep -c "^SYMBOL|" || true)
+	local symbol_count
+	symbol_count=$(echo "$symbols_data" | grep -c "^SYMBOL|" || true)
 	if [[ "${OUTPUT_TSV:-false}" != "true" ]]; then
 		info "  Found $symbol_count symbol(s)"
 	fi

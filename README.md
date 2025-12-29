@@ -1,19 +1,15 @@
-# kicad-shutil
+# 😶‍🌫️ kicad-shutil
 
-**KiCad Symbol Helper Utilities** - Shell scripts for managing KiCad symbol library metadata
+**KiCad Helper Utilities** - Shell scripts for managing KiCad symbol library metadata
 
 ## ✨ Features
 
-- ✅ **DigiKey Integration** - Automatically fetch part numbers, URLs, and metadata
-  - Stores DigiKey Description in `ki_keywords` property
-  - Stores DigiKey Detailed Description in `ki_description` property
-  - Interactive confirmation when overwriting existing metadata
-- ✅ **Datasheet Download** - Bulk download datasheets for all symbols
-- ✅ **Metadata Validation** - Verify footprints and datasheet links
-- ✅ **Summary Reports** - Generate TSV reports of symbol libraries
-- 🔒 **Safe Operations** - Automatic backups before modifications
+- **Official DigiKey API Integration** - Fetch part numbers, URLs, and metadata using DigiKey's official API (no web scraping)
+- **Datasheet Download** - Bulk download datasheets for all symbols
+- **Metadata Validation** - Verify footprints and datasheet links
+- **Terms of Service Compliant** - Uses only authorized APIs, respecting DigiKey's usage policies
 
-## Quick Start
+## 🚀 Quick Start
 
 ```bash
 # Clone with submodules
@@ -27,7 +23,7 @@ git submodule update --init --recursive
 ./kicad-shutil --digikey path/to/your/library.kicad_sym
 ```
 
-## Prerequisites
+## 🐪 Prerequisites
 
 - `bash` (4.0+)
 - `curl`
@@ -39,7 +35,7 @@ git submodule update --init --recursive
 - ✅ Most Linux distributions (built-in)
 - ✅ Windows with Git Bash (included)
 
-## Installation
+## 🦛 Installation
 
 ```bash
 # Clone repository with test framework submodule
@@ -87,7 +83,7 @@ export DIGIKEY_CLIENT_ID="your-client-id"
 export DIGIKEY_CLIENT_SECRET="your-client-secret"
 ```
 
-## 🚀 Usage
+## 🦎 Usage
 
 If no operation is specified, `--verify` is used by default.
 
@@ -158,13 +154,6 @@ Select (1-2, s, q): 1
 [OK]      [LM27762DSST] DigiKey info added: LM27762DSST-ND ($2.50/ea)
 ```
 
-#### Auto-Skip Mode
-
-```bash
-# Skip symbols with multiple candidates
-./kicad-shutil --digikey --auto-skip pmic.kicad_sym
-```
-
 #### Combined Operations
 
 ```bash
@@ -172,7 +161,7 @@ Select (1-2, s, q): 1
 ./kicad-shutil --verify --digikey --datasheet pmic.kicad_sym
 ```
 
-## Project Structure
+## 🦖 Project Structure
 
 ```
 kicad-shutil/
@@ -193,7 +182,7 @@ kicad-shutil/
     └── shunit2/         # Test framework (submodule)
 ```
 
-## Development
+## 🦍 Development
 
 ### Running Tests
 
@@ -215,29 +204,7 @@ git submodule update --init --recursive
 
 See [test/README.md](test/README.md) for detailed testing information.
 
-## How It Works
-
-### S-Expression Parsing
-
-Uses AWK-based state machine to parse KiCad symbol files:
-
-- Identifies symbol boundaries by tracking brace depth
-- Extracts properties while preserving formatting
-- Inserts new properties at correct locations
-
-### Safety Features
-
-- **Automatic backups** - Creates `.bak` files before modifications
-- **Atomic writes** - Uses temporary files to prevent corruption
-- **Validation** - Verifies file integrity after changes
-
-### Caching
-
-- API responses cached for 1 hour
-- Web requests cached for 15 minutes
-- Cache location: `cache/` directory
-
-## Troubleshooting
+## 🦮 Troubleshooting
 
 ### DigiKey API Issues
 
@@ -263,11 +230,11 @@ Install missing tools:
 - Linux: `sudo apt install curl`
 - Windows: Use Git Bash (includes curl)
 
-## License
+## 🦊 License
 
 MIT License - See LICENSE file for details
 
-## Acknowledgments
+## 🦌 Acknowledgments
 
 - [KiCad](https://www.kicad.org/) - Excellent EDA tool
 - [DigiKey](https://www.digikey.com/) - Official API access

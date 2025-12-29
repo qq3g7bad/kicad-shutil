@@ -23,8 +23,10 @@ add_or_update_property() {
 	fi
 
 	# Parse file to get symbol metadata
-	local symbols_data=$(parse_file "$file")
-	local metadata=$(get_symbol_metadata "$symbols_data" "$symbol_name")
+	local symbols_data
+	symbols_data=$(parse_file "$file")
+	local metadata
+	metadata=$(get_symbol_metadata "$symbols_data" "$symbol_name")
 
 	if [[ -z "$metadata" ]]; then
 		error "Symbol not found: $symbol_name in $file"
@@ -32,8 +34,8 @@ add_or_update_property() {
 		return 1
 	fi
 
-	local start_line=$(echo "$metadata" | cut -d'|' -f1)
-	local props_end=$(echo "$metadata" | cut -d'|' -f2)
+	local props_end
+	props_end=$(echo "$metadata" | cut -d'|' -f2)
 
 	# Check if property already exists
 	if has_property "$symbols_data" "$symbol_name" "$prop_name"; then
@@ -65,7 +67,8 @@ insert_property() {
 	local insert_after_line="$5"
 
 	# Get indentation from the previous property line
-	local indent=$(sed -n "${insert_after_line}p" "$file" | sed 's/^\(\s*\).*/\1/')
+	local indent
+	indent=$(sed -n "${insert_after_line}p" "$file" | sed 's/^\(\s*\).*/\1/')
 
 	# If no indent found (no properties yet), use default 4 spaces
 	if [[ -z "$indent" ]]; then
@@ -106,15 +109,18 @@ update_property_value() {
 	local new_value="$4"
 
 	# Parse to find the property line
-	local symbols_data=$(parse_file "$file")
-	local prop_info=$(get_all_properties "$symbols_data" "$symbol_name" | grep "^${prop_name}|")
+	local symbols_data
+	symbols_data=$(parse_file "$file")
+	local prop_info
+	prop_info=$(get_all_properties "$symbols_data" "$symbol_name" | grep "^${prop_name}|")
 
 	if [[ -z "$prop_info" ]]; then
 		error "Property not found: $prop_name in symbol $symbol_name"
 		return 1
 	fi
 
-	local prop_line=$(echo "$prop_info" | cut -d'|' -f3)
+	local prop_line
+	prop_line=$(echo "$prop_info" | cut -d'|' -f3)
 
 	# Replace the property value on that line
 	local temp_file="${file}.tmp.$$"
@@ -143,7 +149,8 @@ verify_file_integrity() {
 	local file="$1"
 
 	# Try to parse the file
-	local symbols_data=$(parse_file "$file" 2>/dev/null)
+	local symbols_data
+	symbols_data=$(parse_file "$file" 2>/dev/null)
 
 	if [[ -z "$symbols_data" ]]; then
 		return 1 # Parse failed
@@ -205,14 +212,17 @@ add_or_update_property_no_backup() {
 	local prop_name="$3"
 	local prop_value="$4"
 
-	local symbols_data=$(parse_file "$file")
-	local metadata=$(get_symbol_metadata "$symbols_data" "$symbol_name")
+	local symbols_data
+	symbols_data=$(parse_file "$file")
+	local metadata
+	metadata=$(get_symbol_metadata "$symbols_data" "$symbol_name")
 
 	if [[ -z "$metadata" ]]; then
 		return 1
 	fi
 
-	local props_end=$(echo "$metadata" | cut -d'|' -f2)
+	local props_end
+	props_end=$(echo "$metadata" | cut -d'|' -f2)
 
 	if has_property "$symbols_data" "$symbol_name" "$prop_name"; then
 		update_property_value "$file" "$symbol_name" "$prop_name" "$prop_value"
@@ -240,7 +250,8 @@ delete_property() {
 	fi
 
 	# Parse file to get symbol metadata
-	local symbols_data=$(parse_file "$file")
+	local symbols_data
+	symbols_data=$(parse_file "$file")
 
 	# Check if property exists
 	if ! has_property "$symbols_data" "$symbol_name" "$prop_name"; then
@@ -256,12 +267,8 @@ delete_property() {
 	# )
 
 	local temp_file="${file}.tmp.$$"
-	local in_target_symbol=false
-	local in_target_property=false
-	local paren_depth=0
-	local property_start_depth=0
 
-	awk -v symbol="$symbol_name" -v prop="$prop_name" '
+	if awk -v symbol="$symbol_name" -v prop="$prop_name" '
     BEGIN {
         in_symbol = 0
         in_property = 0
@@ -269,14 +276,14 @@ delete_property() {
         depth = 0
         prop_depth = 0
     }
-    
+
     # Track when we enter the target symbol
     /^\s*\(symbol/ {
         if ($0 ~ "\\(symbol \"" symbol "\"") {
             in_symbol = 1
         }
     }
-    
+
     # If in target symbol, check for the property
     in_symbol && /^\s*\(property/ {
         if ($0 ~ "\\(property \"" prop "\"") {
@@ -286,7 +293,7 @@ delete_property() {
             next  # Skip this line
         }
     }
-    
+
     # If we are skipping a property, track parentheses to know when it ends
     skip_property {
         prop_depth += gsub(/\(/, "(", $0) - gsub(/\)/, ")", $0)
@@ -296,7 +303,7 @@ delete_property() {
         }
         next  # Skip lines within the property
     }
-    
+
     # Exit symbol when we find the closing parenthesis at depth 0
     in_symbol && /^\s*\)/ {
         # Simple heuristic: if line is just ")" or "  )", it might close the symbol
@@ -304,12 +311,10 @@ delete_property() {
             in_symbol = 0
         }
     }
-    
+
     # Print all other lines
     { print }
-    ' "$file" >"$temp_file"
-
-	if [[ $? -eq 0 ]]; then
+    ' "$file" >"$temp_file"; then
 		mv "$temp_file" "$file"
 
 		# Verify the file is still valid after modification

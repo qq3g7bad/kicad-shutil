@@ -71,7 +71,9 @@ for test_file in "${test_files[@]}"; do
 		((total_passed++))
 	else
 		echo -e "${RED}✗ $test_name failed${NC}"
-		echo "$output" | sed 's/^/  /'
+		while IFS= read -r line; do
+			echo "  $line"
+		done <<<"$output"
 		((total_failed++))
 		failed_tests+=("$test_name")
 	fi

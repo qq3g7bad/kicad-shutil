@@ -6,15 +6,15 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LIB_DIR="$SCRIPT_DIR/lib"
 
+# Disable color output for consistent test results (must be set before sourcing)
+export COLOR_RED=""
+export COLOR_GREEN=""
+export COLOR_YELLOW=""
+export COLOR_BLUE=""
+export COLOR_RESET=""
+
 # Source the module to test
 source "$LIB_DIR/utils.sh"
-
-# Disable color output for consistent test results
-COLOR_RED=""
-COLOR_GREEN=""
-COLOR_YELLOW=""
-COLOR_BLUE=""
-COLOR_RESET=""
 
 #-----------------------------------
 # Test: info() function

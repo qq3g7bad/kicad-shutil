@@ -2,6 +2,7 @@
 
 # parser.sh - S-expression parser for KiCad symbol files
 # Parses .kicad_sym files and extracts symbol metadata
+# shellcheck disable=SC2155  # Declare and assign separately - acceptable for parser performance
 
 # Parse a .kicad_sym file and extract all symbols with their properties
 # Output format:
@@ -32,10 +33,12 @@ parse_file() {
     }
 
     # Detect main symbol start: (symbol "NAME" where NAME doesnt match _N_M pattern
-    /^\s*\(symbol "[^"]+"/ {
-        # Extract the candidate symbol name
-        match($0, /\(symbol "([^"]+)"/, arr)
-        candidate_name = arr[1]
+    /^[[:space:]]*\(symbol "[^"]+"/ {
+        # Extract the candidate symbol name (BSD awk compatible - using split)
+        # Format: (symbol "NAME" ...
+        # Split by double quotes to get the symbol name
+        split($0, name_parts, "\"")
+        candidate_name = name_parts[2]
 
         # Check if this is a nested graphical symbol (contains _N_M pattern at end)
         # Pattern: NAME_1_1, NAME_2_1, NAME_0_0, etc.
@@ -56,15 +59,22 @@ parse_file() {
     }
 
     # Track properties while in main symbol (before nested symbols)
-    in_symbol && !property_section_done && /^\s*\(property "[^"]+"/ {
+    in_symbol && !property_section_done && /^[[:space:]]*\(property "[^"]+"/ {
         in_property = 1
         property_depth = 0
 
-        # Extract property name and value
+        # Extract property name and value (BSD awk compatible - using split)
         # Handle multi-line by only capturing on the opening line
-        if (match($0, /\(property "([^"]+)" "([^"]*)"/, prop)) {
-            properties[prop[1]] = prop[2]
-            prop_lines[prop[1]] = NR
+        # Format: (property "NAME" "VALUE" ...
+        if ($0 ~ /\(property "[^"]+" "[^"]*"/) {
+            # Split by double quotes to get property name and value
+            # Parts: [0]=(property , [1]=empty, [2]=NAME, [3]= , [4]=VALUE, ...
+            split($0, prop_parts, "\"")
+            prop_name = prop_parts[2]
+            prop_value = prop_parts[4]
+
+            properties[prop_name] = prop_value
+            prop_lines[prop_name] = NR
         }
     }
 

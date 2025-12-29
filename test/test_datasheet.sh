@@ -1,11 +1,19 @@
 #!/usr/bin/env bash
 
 # Unit tests for lib/datasheet.sh
+# shellcheck disable=SC2155  # Declare and assign separately - not critical in tests
 
 # Setup test environment
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LIB_DIR="$SCRIPT_DIR/lib"
 TEST_DIR="$(dirname "${BASH_SOURCE[0]}")"
+
+# Disable color output (must be set before sourcing)
+export COLOR_RED=""
+export COLOR_GREEN=""
+export COLOR_YELLOW=""
+export COLOR_BLUE=""
+export COLOR_RESET=""
 
 # Source dependencies
 source "$LIB_DIR/utils.sh"
@@ -25,13 +33,6 @@ if ! type get_file_extension_from_url >/dev/null 2>&1; then
 		fi
 	}
 fi
-
-# Disable color output for consistent test results
-COLOR_RED=""
-COLOR_GREEN=""
-COLOR_YELLOW=""
-COLOR_BLUE=""
-COLOR_RESET=""
 
 # Mock spinner functions
 start_spinner() { :; }
@@ -122,7 +123,9 @@ setUp() {
 	init_datasheet_stats
 
 	# Clean output directory
-	rm -rf "$TEST_OUTPUT_DIR"/*
+	if [[ -n "$TEST_OUTPUT_DIR" && "$TEST_OUTPUT_DIR" != "/" ]]; then
+		rm -rf "${TEST_OUTPUT_DIR:?}"/*
+	fi
 }
 
 #-----------------------------------
@@ -131,11 +134,11 @@ setUp() {
 testInitDatasheetStats() {
 	init_datasheet_stats
 
-	assertEquals "0" "${DATASHEET_STATS[total]}"
-	assertEquals "0" "${DATASHEET_STATS[success]}"
-	assertEquals "0" "${DATASHEET_STATS[failed]}"
-	assertEquals "0" "${DATASHEET_STATS[missing]}"
-	assertEquals "0" "${DATASHEET_STATS[skipped]}"
+	assertEquals "0" "${DATASHEET_STATS_TOTAL}"
+	assertEquals "0" "${DATASHEET_STATS_SUCCESS}"
+	assertEquals "0" "${DATASHEET_STATS_FAILED}"
+	assertEquals "0" "${DATASHEET_STATS_MISSING}"
+	assertEquals "0" "${DATASHEET_STATS_SKIPPED}"
 }
 
 #-----------------------------------
@@ -179,8 +182,8 @@ testDownloadSymbolDatasheetHTTP() {
 
 	download_symbol_datasheet "$TEST_SYMBOL_FILE" "$symbols_data" "WithHTTPDatasheet" "$TEST_OUTPUT_DIR/test" 2>/dev/null
 
-	assertEquals "1" "${DATASHEET_STATS[total]}"
-	assertEquals "1" "${DATASHEET_STATS[success]}"
+	assertEquals "1" "${DATASHEET_STATS_TOTAL}"
+	assertEquals "1" "${DATASHEET_STATS_SUCCESS}"
 	assertTrue "Downloaded file should exist" "[[ -f $TEST_OUTPUT_DIR/test/WithHTTPDatasheet.pdf ]]"
 }
 
@@ -193,8 +196,8 @@ testDownloadSymbolDatasheetLocal() {
 
 	download_symbol_datasheet "$TEST_SYMBOL_FILE" "$symbols_data" "WithLocalDatasheet" "$TEST_OUTPUT_DIR/test" 2>/dev/null
 
-	assertEquals "1" "${DATASHEET_STATS[total]}"
-	assertEquals "1" "${DATASHEET_STATS[skipped]}"
+	assertEquals "1" "${DATASHEET_STATS_TOTAL}"
+	assertEquals "1" "${DATASHEET_STATS_SKIPPED}"
 	assertFalse "Should not download local file" "[[ -f $TEST_OUTPUT_DIR/test/WithLocalDatasheet.pdf ]]"
 }
 
@@ -207,8 +210,8 @@ testDownloadSymbolDatasheetMissing() {
 
 	download_symbol_datasheet "$TEST_SYMBOL_FILE" "$symbols_data" "NoDatasheet" "$TEST_OUTPUT_DIR/test" 2>/dev/null
 
-	assertEquals "1" "${DATASHEET_STATS[total]}"
-	assertEquals "1" "${DATASHEET_STATS[missing]}"
+	assertEquals "1" "${DATASHEET_STATS_TOTAL}"
+	assertEquals "1" "${DATASHEET_STATS_MISSING}"
 }
 
 #-----------------------------------
@@ -224,8 +227,8 @@ testDownloadSymbolDatasheetSkipExisting() {
 
 	download_symbol_datasheet "$TEST_SYMBOL_FILE" "$symbols_data" "WithHTTPDatasheet" "$TEST_OUTPUT_DIR/test" 2>/dev/null
 
-	assertEquals "1" "${DATASHEET_STATS[total]}"
-	assertEquals "1" "${DATASHEET_STATS[skipped]}"
+	assertEquals "1" "${DATASHEET_STATS_TOTAL}"
+	assertEquals "1" "${DATASHEET_STATS_SKIPPED}"
 
 	# Content should not change
 	local content=$(cat "$TEST_OUTPUT_DIR/test/WithHTTPDatasheet.pdf")
@@ -241,21 +244,21 @@ testDownloadDatasheetsAll() {
 
 	download_datasheets "$TEST_SYMBOL_FILE" "$symbols_data" "test_category" 2>/dev/null
 
-	assertEquals "3" "${DATASHEET_STATS[total]}"
-	assertEquals "1" "${DATASHEET_STATS[success]}"
-	assertEquals "1" "${DATASHEET_STATS[skipped]}"
-	assertEquals "1" "${DATASHEET_STATS[missing]}"
+	assertEquals "3" "${DATASHEET_STATS_TOTAL}"
+	assertEquals "1" "${DATASHEET_STATS_SUCCESS}"
+	assertEquals "1" "${DATASHEET_STATS_SKIPPED}"
+	assertEquals "1" "${DATASHEET_STATS_MISSING}"
 }
 
 #-----------------------------------
 # Test: print_datasheet_summary()
 #-----------------------------------
 testPrintDatasheetSummary() {
-	DATASHEET_STATS[total]=10
-	DATASHEET_STATS[success]=7
-	DATASHEET_STATS[failed]=1
-	DATASHEET_STATS[missing]=1
-	DATASHEET_STATS[skipped]=1
+	DATASHEET_STATS_TOTAL=10
+	DATASHEET_STATS_SUCCESS=7
+	DATASHEET_STATS_FAILED=1
+	DATASHEET_STATS_MISSING=1
+	DATASHEET_STATS_SKIPPED=1
 
 	local output=$(print_datasheet_summary 2>&1)
 
@@ -267,7 +270,9 @@ testPrintDatasheetSummary() {
 # Test: Statistics accumulation
 #-----------------------------------
 testStatisticsAccumulation() {
-	local symbols_data=$(parse_file "$TEST_SYMBOL_FILE")
+	local symbols_data
+	symbols_data=$(parse_file "$TEST_SYMBOL_FILE")
+	# shellcheck disable=SC2034  # DATASHEET_DIR used by download functions
 	DATASHEET_DIR="$TEST_OUTPUT_DIR"
 
 	# Download multiple times
@@ -275,10 +280,10 @@ testStatisticsAccumulation() {
 	download_symbol_datasheet "$TEST_SYMBOL_FILE" "$symbols_data" "NoDatasheet" "$TEST_OUTPUT_DIR/test2" 2>/dev/null
 	download_symbol_datasheet "$TEST_SYMBOL_FILE" "$symbols_data" "WithLocalDatasheet" "$TEST_OUTPUT_DIR/test3" 2>/dev/null
 
-	assertEquals "3" "${DATASHEET_STATS[total]}"
-	assertEquals "1" "${DATASHEET_STATS[success]}"
-	assertEquals "1" "${DATASHEET_STATS[missing]}"
-	assertEquals "1" "${DATASHEET_STATS[skipped]}"
+	assertEquals "3" "${DATASHEET_STATS_TOTAL}"
+	assertEquals "1" "${DATASHEET_STATS_SUCCESS}"
+	assertEquals "1" "${DATASHEET_STATS_MISSING}"
+	assertEquals "1" "${DATASHEET_STATS_SKIPPED}"
 }
 
 #-----------------------------------

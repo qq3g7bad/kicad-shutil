@@ -2,20 +2,24 @@
 
 # utils.sh - Utility functions for kicad-shutil
 # Cross-platform (Linux, macOS, Windows Git Bash)
+# shellcheck disable=SC2155  # Declare and assign separately - acceptable for utility functions
 
 # Color output (if terminal supports it)
-if [[ -t 1 ]] && command -v tput >/dev/null 2>&1; then
-	COLOR_RED=$(tput setaf 1 2>/dev/null || echo "")
-	COLOR_GREEN=$(tput setaf 2 2>/dev/null || echo "")
-	COLOR_YELLOW=$(tput setaf 3 2>/dev/null || echo "")
-	COLOR_BLUE=$(tput setaf 4 2>/dev/null || echo "")
-	COLOR_RESET=$(tput sgr0 2>/dev/null || echo "")
-else
-	COLOR_RED=""
-	COLOR_GREEN=""
-	COLOR_YELLOW=""
-	COLOR_BLUE=""
-	COLOR_RESET=""
+# Allow tests to override by pre-defining these variables
+if [[ -z "${COLOR_RED+x}" ]]; then
+	if [[ -t 1 ]] && command -v tput >/dev/null 2>&1; then
+		COLOR_RED=$(tput setaf 1 2>/dev/null || echo "")
+		COLOR_GREEN=$(tput setaf 2 2>/dev/null || echo "")
+		COLOR_YELLOW=$(tput setaf 3 2>/dev/null || echo "")
+		COLOR_BLUE=$(tput setaf 4 2>/dev/null || echo "")
+		COLOR_RESET=$(tput sgr0 2>/dev/null || echo "")
+	else
+		COLOR_RED=""
+		COLOR_GREEN=""
+		COLOR_YELLOW=""
+		COLOR_BLUE=""
+		COLOR_RESET=""
+	fi
 fi
 
 # Logging functions
@@ -249,7 +253,7 @@ download_file() {
 	local output_dir=$(dirname "$output")
 	mkdir -p "$output_dir"
 
-	for attempt in $(seq 1 $max_attempts); do
+	for attempt in $(seq 1 "$max_attempts"); do
 		# Use --http1.1 to avoid HTTP/2 issues with some servers (e.g., TDK)
 		# Send browser-like headers to avoid bot detection (e.g., Analog Devices)
 		# --connect-timeout: max time to establish connection
@@ -321,7 +325,7 @@ select_from_list() {
 	echo "" >&2
 
 	while true; do
-		read -p "Select (1-${#items[@]}, s, q): " choice </dev/tty
+		read -r -p "Select (1-${#items[@]}, s, q): " choice </dev/tty
 
 		case "$choice" in
 			q | Q)
