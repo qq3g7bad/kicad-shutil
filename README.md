@@ -3,7 +3,7 @@
 ![CI Tests](https://github.com/qq3g7bad/kicad-shutil/workflows/CI%20Tests/badge.svg)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Shell](https://img.shields.io/badge/Shell-Bash-green.svg)](https://www.gnu.org/software/bash/)
-[![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux-blue.svg)](https://github.com/qq3g7bad/kicad-shutil)
+[![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux%20%7C%20Windows-blue.svg)](https://github.com/qq3g7bad/kicad-shutil)
 [![KiCad](https://img.shields.io/badge/KiCad-Tools-blue.svg)](https://www.kicad.org/)
 [![Code Style](https://img.shields.io/badge/code%20style-shellcheck-blue.svg)](https://www.shellcheck.net/)
 
