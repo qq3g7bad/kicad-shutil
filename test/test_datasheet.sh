@@ -139,11 +139,11 @@ setUp() {
 testInitDatasheetStats() {
 	init_datasheet_stats
 
-	assertEquals "0" "${DATASHEET_STATS[total]}"
-	assertEquals "0" "${DATASHEET_STATS[success]}"
-	assertEquals "0" "${DATASHEET_STATS[failed]}"
-	assertEquals "0" "${DATASHEET_STATS[missing]}"
-	assertEquals "0" "${DATASHEET_STATS[skipped]}"
+	assertEquals "0" "${DATASHEET_STATS_TOTAL}"
+	assertEquals "0" "${DATASHEET_STATS_SUCCESS}"
+	assertEquals "0" "${DATASHEET_STATS_FAILED}"
+	assertEquals "0" "${DATASHEET_STATS_MISSING}"
+	assertEquals "0" "${DATASHEET_STATS_SKIPPED}"
 }
 
 #-----------------------------------
@@ -192,8 +192,8 @@ testDownloadSymbolDatasheetHTTP() {
 
 	download_symbol_datasheet "$TEST_SYMBOL_FILE" "$symbols_data" "WithHTTPDatasheet" "$TEST_OUTPUT_DIR/test" 2>/dev/null
 
-	assertEquals "1" "${DATASHEET_STATS[total]}"
-	assertEquals "1" "${DATASHEET_STATS[success]}"
+	assertEquals "1" "${DATASHEET_STATS_TOTAL}"
+	assertEquals "1" "${DATASHEET_STATS_SUCCESS}"
 	assertTrue "Downloaded file should exist" "[[ -f $TEST_OUTPUT_DIR/test/WithHTTPDatasheet.pdf ]]"
 }
 
@@ -207,8 +207,8 @@ testDownloadSymbolDatasheetLocal() {
 
 	download_symbol_datasheet "$TEST_SYMBOL_FILE" "$symbols_data" "WithLocalDatasheet" "$TEST_OUTPUT_DIR/test" 2>/dev/null
 
-	assertEquals "1" "${DATASHEET_STATS[total]}"
-	assertEquals "1" "${DATASHEET_STATS[skipped]}"
+	assertEquals "1" "${DATASHEET_STATS_TOTAL}"
+	assertEquals "1" "${DATASHEET_STATS_SKIPPED}"
 	assertFalse "Should not download local file" "[[ -f $TEST_OUTPUT_DIR/test/WithLocalDatasheet.pdf ]]"
 }
 
@@ -222,8 +222,8 @@ testDownloadSymbolDatasheetMissing() {
 
 	download_symbol_datasheet "$TEST_SYMBOL_FILE" "$symbols_data" "NoDatasheet" "$TEST_OUTPUT_DIR/test" 2>/dev/null
 
-	assertEquals "1" "${DATASHEET_STATS[total]}"
-	assertEquals "1" "${DATASHEET_STATS[missing]}"
+	assertEquals "1" "${DATASHEET_STATS_TOTAL}"
+	assertEquals "1" "${DATASHEET_STATS_MISSING}"
 }
 
 #-----------------------------------
@@ -240,8 +240,8 @@ testDownloadSymbolDatasheetSkipExisting() {
 
 	download_symbol_datasheet "$TEST_SYMBOL_FILE" "$symbols_data" "WithHTTPDatasheet" "$TEST_OUTPUT_DIR/test" 2>/dev/null
 
-	assertEquals "1" "${DATASHEET_STATS[total]}"
-	assertEquals "1" "${DATASHEET_STATS[skipped]}"
+	assertEquals "1" "${DATASHEET_STATS_TOTAL}"
+	assertEquals "1" "${DATASHEET_STATS_SKIPPED}"
 
 	# Content should not change
 	local content
@@ -259,21 +259,21 @@ testDownloadDatasheetsAll() {
 
 	download_datasheets "$TEST_SYMBOL_FILE" "$symbols_data" "test_category" 2>/dev/null
 
-	assertEquals "3" "${DATASHEET_STATS[total]}"
-	assertEquals "1" "${DATASHEET_STATS[success]}"
-	assertEquals "1" "${DATASHEET_STATS[skipped]}"
-	assertEquals "1" "${DATASHEET_STATS[missing]}"
+	assertEquals "3" "${DATASHEET_STATS_TOTAL}"
+	assertEquals "1" "${DATASHEET_STATS_SUCCESS}"
+	assertEquals "1" "${DATASHEET_STATS_SKIPPED}"
+	assertEquals "1" "${DATASHEET_STATS_MISSING}"
 }
 
 #-----------------------------------
 # Test: print_datasheet_summary()
 #-----------------------------------
 testPrintDatasheetSummary() {
-	DATASHEET_STATS[total]=10
-	DATASHEET_STATS[success]=7
-	DATASHEET_STATS[failed]=1
-	DATASHEET_STATS[missing]=1
-	DATASHEET_STATS[skipped]=1
+	DATASHEET_STATS_TOTAL=10
+	DATASHEET_STATS_SUCCESS=7
+	DATASHEET_STATS_FAILED=1
+	DATASHEET_STATS_MISSING=1
+	DATASHEET_STATS_SKIPPED=1
 
 	local output
 	output=$(print_datasheet_summary 2>&1)
@@ -295,10 +295,10 @@ testStatisticsAccumulation() {
 	download_symbol_datasheet "$TEST_SYMBOL_FILE" "$symbols_data" "NoDatasheet" "$TEST_OUTPUT_DIR/test2" 2>/dev/null
 	download_symbol_datasheet "$TEST_SYMBOL_FILE" "$symbols_data" "WithLocalDatasheet" "$TEST_OUTPUT_DIR/test3" 2>/dev/null
 
-	assertEquals "3" "${DATASHEET_STATS[total]}"
-	assertEquals "1" "${DATASHEET_STATS[success]}"
-	assertEquals "1" "${DATASHEET_STATS[missing]}"
-	assertEquals "1" "${DATASHEET_STATS[skipped]}"
+	assertEquals "3" "${DATASHEET_STATS_TOTAL}"
+	assertEquals "1" "${DATASHEET_STATS_SUCCESS}"
+	assertEquals "1" "${DATASHEET_STATS_MISSING}"
+	assertEquals "1" "${DATASHEET_STATS_SKIPPED}"
 }
 
 #-----------------------------------

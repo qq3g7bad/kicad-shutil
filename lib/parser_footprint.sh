@@ -39,35 +39,52 @@ parse_footprint_file() {
 	}
 
 	# Find model section
-	/^\s*\(model/ {
+	/^[[:space:]]*\(model/ {
 		in_model = 1
-		# Extract model path (handle quoted strings and environment variables)
-		if (match($0, /\(model\s+"([^"]+)"/, m)) {
-			model_path = m[1]
-		} else if (match($0, /\(model\s+([^\s\)]+)/, m)) {
-			model_path = m[1]
+		# Extract model path (BSD awk compatible)
+		line = $0
+		model_path = ""
+		pos = match(line, /"[^"]+"/)
+		if (pos > 0) {
+			# Quoted path
+			model_path = substr(line, RSTART+1, RLENGTH-2)
+		} else {
+			# Environment variable or unquoted path
+			pos = match(line, /\$\{[^}]+\}/)
+			if (pos > 0) {
+				model_path = substr(line, RSTART, RLENGTH)
+			}
 		}
 		next
 	}
 
 	in_model {
-		# Extract at (xyz ...) coordinates
-		if (match($0, /\(at\s+\(xyz\s+([0-9.-]+)\s+([0-9.-]+)\s+([0-9.-]+)\)/, m)) {
-			at_xyz = m[1] " " m[2] " " m[3]
+		# Extract at (xyz ...) coordinates - BSD awk compatible
+		if ($0 ~ /\(at[[:space:]]+\(xyz[[:space:]]+[0-9.-]+[[:space:]]+[0-9.-]+[[:space:]]+[0-9.-]+\)/) {
+			line = $0
+			sub(/.*\(xyz[[:space:]]+/, "", line)
+			sub(/\).*/, "", line)
+			at_xyz = line
 		}
 
-		# Extract scale (xyz ...) values
-		if (match($0, /\(scale\s+\(xyz\s+([0-9.-]+)\s+([0-9.-]+)\s+([0-9.-]+)\)/, m)) {
-			scale_xyz = m[1] " " m[2] " " m[3]
+		# Extract scale (xyz ...) values - BSD awk compatible
+		if ($0 ~ /\(scale[[:space:]]+\(xyz[[:space:]]+[0-9.-]+[[:space:]]+[0-9.-]+[[:space:]]+[0-9.-]+\)/) {
+			line = $0
+			sub(/.*\(xyz[[:space:]]+/, "", line)
+			sub(/\).*/, "", line)
+			scale_xyz = line
 		}
 
-		# Extract rotate (xyz ...) values
-		if (match($0, /\(rotate\s+\(xyz\s+([0-9.-]+)\s+([0-9.-]+)\s+([0-9.-]+)\)/, m)) {
-			rotate_xyz = m[1] " " m[2] " " m[3]
+		# Extract rotate (xyz ...) values - BSD awk compatible
+		if ($0 ~ /\(rotate[[:space:]]+\(xyz[[:space:]]+[0-9.-]+[[:space:]]+[0-9.-]+[[:space:]]+[0-9.-]+\)/) {
+			line = $0
+			sub(/.*\(xyz[[:space:]]+/, "", line)
+			sub(/\).*/, "", line)
+			rotate_xyz = line
 		}
 
 		# End of model section
-		if ($0 ~ /^\s*\)$/ && in_model) {
+		if ($0 ~ /^[[:space:]]*\)$/ && in_model) {
 			# Output model information
 			if (model_path != "") {
 				print "MODEL|" model_path "|at|" at_xyz "|scale|" scale_xyz "|rotate|" rotate_xyz

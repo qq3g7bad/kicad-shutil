@@ -305,43 +305,130 @@ parse_digikey_api_response() {
         for (p = v-1; p >= 1; p--) {
           prev = variations[p]
           
-          # Extract ProductUrl
-          if (match(prev, /"ProductUrl"[[:space:]]*:[[:space:]]*"([^"]*)"/, arr)) {
-            product_url = arr[1]
+          # Extract ProductUrl - BSD awk compatible
+          if (prev ~ /"ProductUrl"/) {
+            line = prev
+            # Find position after "ProductUrl":"
+            idx = index(line, "\"ProductUrl\"")
+            if (idx > 0) {
+              line = substr(line, idx)
+              # Find the value part after the colon
+              idx = index(line, ":")
+              if (idx > 0) {
+                line = substr(line, idx+1)
+                # Find the quoted value
+                pos = match(line, /"[^"]*"/)
+                if (pos > 0) {
+                  product_url = substr(line, RSTART+1, RLENGTH-2)
+                }
+              }
+            }
           }
           
-          # Extract ProductDescription
-          if (match(prev, /"ProductDescription"[[:space:]]*:[[:space:]]*"([^"]*)"/, arr)) {
-            product_desc = arr[1]
+          # Extract ProductDescription - BSD awk compatible
+          if (prev ~ /"ProductDescription"/) {
+            line = prev
+            idx = index(line, "\"ProductDescription\"")
+            if (idx > 0) {
+              line = substr(line, idx)
+              idx = index(line, ":")
+              if (idx > 0) {
+                line = substr(line, idx+1)
+                if (pos = match(line, /"[^"]*"/)) {
+                  product_desc = substr(line, RSTART+1, RLENGTH-2)
+                }
+              }
+            }
           }
           
-          # Extract DetailedDescription
-          if (match(prev, /"DetailedDescription"[[:space:]]*:[[:space:]]*"([^"]*)"/, arr)) {
-            detailed_desc = arr[1]
+          # Extract DetailedDescription - BSD awk compatible
+          if (prev ~ /"DetailedDescription"/) {
+            line = prev
+            idx = index(line, "\"DetailedDescription\"")
+            if (idx > 0) {
+              line = substr(line, idx)
+              idx = index(line, ":")
+              if (idx > 0) {
+                line = substr(line, idx+1)
+                if (pos = match(line, /"[^"]*"/)) {
+                  detailed_desc = substr(line, RSTART+1, RLENGTH-2)
+                }
+              }
+            }
           }
           
           if (product_url != "") break
         }
         
-        # Extract variation-level fields
-        if (match(variation, /"DigiKeyProductNumber"[[:space:]]*:[[:space:]]*"([^"]*)"/, arr)) {
-          dkpn = arr[1]
+        # Extract variation-level fields - BSD awk compatible
+        if (variation ~ /"DigiKeyProductNumber"/) {
+          line = variation
+          idx = index(line, "\"DigiKeyProductNumber\"")
+          if (idx > 0) {
+            line = substr(line, idx)
+            idx = index(line, ":")
+            if (idx > 0) {
+              line = substr(line, idx+1)
+              if (pos = match(line, /"[^"]*"/)) {
+                dkpn = substr(line, RSTART+1, RLENGTH-2)
+              }
+            }
+          }
         }
         
-        if (match(variation, /"UnitPrice"[[:space:]]*:[[:space:]]*([0-9.]+)/, arr)) {
-          price = arr[1]
+        if (variation ~ /"UnitPrice"/) {
+          line = variation
+          idx = index(line, "\"UnitPrice\"")
+          if (idx > 0) {
+            line = substr(line, idx)
+            idx = index(line, ":")
+            if (idx > 0) {
+              line = substr(line, idx+1)
+              if (pos = match(line, /[0-9.]+/)) {
+                price = substr(line, RSTART, RLENGTH)
+              }
+            }
+          }
         }
         
-        if (match(variation, /"MinimumOrderQuantity"[[:space:]]*:[[:space:]]*([0-9]+)/, arr)) {
-          moq = arr[1]
+        if (variation ~ /"MinimumOrderQuantity"/) {
+          line = variation
+          idx = index(line, "\"MinimumOrderQuantity\"")
+          if (idx > 0) {
+            line = substr(line, idx)
+            idx = index(line, ":")
+            if (idx > 0) {
+              line = substr(line, idx+1)
+              if (pos = match(line, /[0-9]+/)) {
+                moq = substr(line, RSTART, RLENGTH)
+              }
+            }
+          }
         } else {
           moq = "1"
         }
         
-        # Extract package type if present
+        # Extract package type - BSD awk compatible
         pkg = "Unknown"
-        if (match(variation, /"PackageType"[[:space:]]*:[[:space:]]*\{[^}]*"Name"[[:space:]]*:[[:space:]]*"([^"]*)"/, arr)) {
-          pkg = arr[1]
+        if (variation ~ /"PackageType"/) {
+          line = variation
+          # Find PackageType section
+          idx = index(line, "\"PackageType\"")
+          if (idx > 0) {
+            line = substr(line, idx)
+            # Find Name field within PackageType
+            idx = index(line, "\"Name\"")
+            if (idx > 0) {
+              line = substr(line, idx)
+              idx = index(line, ":")
+              if (idx > 0) {
+                line = substr(line, idx+1)
+                if (pos = match(line, /"[^"]*"/)) {
+                  pkg = substr(line, RSTART+1, RLENGTH-2)
+                }
+              }
+            }
+          }
         }
         
         # Output if we have required fields

@@ -45,11 +45,21 @@ parse_project_file() {
 			if (c == "}") brace_depth--
 		}
 
-		# Extract key-value pairs
-		if (match($0, /"([^"]+)"\s*:\s*"([^"]*)"/, m)) {
-			var_name = m[1]
-			var_value = m[2]
-			print "TEXT_VAR|" var_name "|" var_value
+		# Extract key-value pairs (BSD awk compatible)
+		if ($0 ~ /"[^"]+"[[:space:]]*:[[:space:]]*"[^"]*"/) {
+			# Find first quoted string (key)
+			line = $0
+			pos = match(line, /"[^"]+"/)
+			if (pos > 0) {
+				var_name = substr(line, RSTART+1, RLENGTH-2)
+				# Remove first quoted part and find second quoted string (value)
+				line = substr(line, RSTART+RLENGTH)
+				pos = match(line, /"[^"]*"/)
+				if (pos > 0) {
+					var_value = substr(line, RSTART+1, RLENGTH-2)
+					print "TEXT_VAR|" var_name "|" var_value
+				}
+			}
 		}
 
 		# Exit text_variables section when closing brace
@@ -87,11 +97,21 @@ parse_project_file() {
 			if (c == "}") var_depth--
 		}
 
-		# Extract key-value pairs
-		if (match($0, /"([^"]+)"\s*:\s*"([^"]*)"/, m)) {
-			var_name = m[1]
-			var_value = m[2]
-			print "ENV_VAR|" var_name "|" var_value
+		# Extract key-value pairs (BSD awk compatible)
+		if ($0 ~ /"[^"]+"[[:space:]]*:[[:space:]]*"[^"]*"/) {
+			# Find first quoted string (key)
+			line = $0
+			pos = match(line, /"[^"]+"/)
+			if (pos > 0) {
+				var_name = substr(line, RSTART+1, RLENGTH-2)
+				# Remove first quoted part and find second quoted string (value)
+				line = substr(line, RSTART+RLENGTH)
+				pos = match(line, /"[^"]*"/)
+				if (pos > 0) {
+					var_value = substr(line, RSTART+1, RLENGTH-2)
+					print "ENV_VAR|" var_name "|" var_value
+				}
+			}
 		}
 
 		# Exit vars section when closing brace

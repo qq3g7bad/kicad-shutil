@@ -69,7 +69,7 @@ insert_property() {
 
 	# Get indentation from the previous property line
 	local indent
-	indent=$(sed -n "${insert_after_line}p" "$file" | sed 's/^\(\s*\).*/\1/')
+	indent=$(sed -n "${insert_after_line}p" "$file" | sed 's/^\([[:space:]]*\).*/\1/')
 
 	# If no indent found (no properties yet), use default 4 spaces
 	if [[ -z "$indent" ]]; then
@@ -279,14 +279,14 @@ delete_property() {
     }
     
     # Track when we enter the target symbol
-    /^\s*\(symbol/ {
+    /^[[:space:]]*\(symbol/ {
         if ($0 ~ "\\(symbol \"" symbol "\"") {
             in_symbol = 1
         }
     }
     
     # If in target symbol, check for the property
-    in_symbol && /^\s*\(property/ {
+    in_symbol && /^[[:space:]]*\(property/ {
         if ($0 ~ "\\(property \"" prop "\"") {
             in_property = 1
             skip_property = 1
@@ -306,9 +306,9 @@ delete_property() {
     }
     
     # Exit symbol when we find the closing parenthesis at depth 0
-    in_symbol && /^\s*\)/ {
+    in_symbol && /^[[:space:]]*\)/ {
         # Simple heuristic: if line is just ")" or "  )", it might close the symbol
-        if ($0 ~ /^\s*\)\s*$/) {
+        if ($0 ~ /^[[:space:]]*\)[[:space:]]*$/) {
             in_symbol = 0
         }
     }

@@ -25,18 +25,26 @@ fi
 
 # Global array to store verification results
 declare -a VERIFY_RESULTS
-declare -A VERIFY_STATS
+
+# Global statistics (bash 3.2 compatible - no associative arrays)
+VERIFY_STATS_TOTAL_SYMBOLS=0
+VERIFY_STATS_OK_SYMBOLS=0
+VERIFY_STATS_ISSUE_SYMBOLS=0
+VERIFY_STATS_MISSING_FOOTPRINT=0
+VERIFY_STATS_MISSING_DATASHEET=0
+VERIFY_STATS_BROKEN_DATASHEET=0
+VERIFY_STATS_MISSING_DIGIKEY=0
 
 # @IMPL-VERIFY-002@ (FROM: @ARCH-VERIFY-001@)
 # Initialize verification statistics
 init_verify_stats() {
-	VERIFY_STATS[total_symbols]=0
-	VERIFY_STATS[ok_symbols]=0
-	VERIFY_STATS[issue_symbols]=0
-	VERIFY_STATS[missing_footprint]=0
-	VERIFY_STATS[missing_datasheet]=0
-	VERIFY_STATS[broken_datasheet]=0
-	VERIFY_STATS[missing_digikey]=0
+	VERIFY_STATS_TOTAL_SYMBOLS=0
+	VERIFY_STATS_OK_SYMBOLS=0
+	VERIFY_STATS_ISSUE_SYMBOLS=0
+	VERIFY_STATS_MISSING_FOOTPRINT=0
+	VERIFY_STATS_MISSING_DATASHEET=0
+	VERIFY_STATS_BROKEN_DATASHEET=0
+	VERIFY_STATS_MISSING_DIGIKEY=0
 	VERIFY_RESULTS=()
 }
 
@@ -97,9 +105,9 @@ verify_symbol_file() {
 		verify_symbol "$file" "$symbols_data" "$symbol"
 	done <<<"$symbols"
 
-	local total=${VERIFY_STATS[total_symbols]}
-	local ok=${VERIFY_STATS[ok_symbols]}
-	local issues=${VERIFY_STATS[issue_symbols]}
+	local total=${VERIFY_STATS_TOTAL_SYMBOLS}
+	local ok=${VERIFY_STATS_OK_SYMBOLS}
+	local issues=${VERIFY_STATS_ISSUE_SYMBOLS}
 
 	if [[ $issues -eq 0 ]]; then
 		success "  All $total symbol(s) verified successfully"
@@ -118,7 +126,7 @@ verify_symbol() {
 	local filename
 	filename=$(basename "$file")
 
-	((VERIFY_STATS[total_symbols]++)) || true
+	((VERIFY_STATS_TOTAL_SYMBOLS++)) || true
 
 	local issues=()
 
@@ -137,7 +145,7 @@ verify_symbol() {
 	# Check 1: Footprint exists and is not empty
 	if [[ -z "$footprint" ]]; then
 		issues+=("MISSING_FOOTPRINT|")
-		((VERIFY_STATS[missing_footprint]++)) || true
+		((VERIFY_STATS_MISSING_FOOTPRINT++)) || true
 	elif [[ "$footprint" == "" ]]; then
 		issues+=("EMPTY_FOOTPRINT|")
 	fi
@@ -145,7 +153,7 @@ verify_symbol() {
 	# Check 2: Datasheet URL validation
 	if [[ -z "$datasheet" ]]; then
 		issues+=("MISSING_DATASHEET|")
-		((VERIFY_STATS[missing_datasheet]++)) || true
+		((VERIFY_STATS_MISSING_DATASHEET++)) || true
 	elif [[ "$datasheet" == "" ]]; then
 		issues+=("EMPTY_DATASHEET|")
 	else
@@ -170,7 +178,7 @@ verify_symbol() {
 
 		if [[ "$ds_status" == "BROKEN" ]]; then
 			issues+=("DATASHEET_BROKEN|$datasheet")
-			((VERIFY_STATS[broken_datasheet]++)) || true
+			((VERIFY_STATS_BROKEN_DATASHEET++)) || true
 		elif [[ "$ds_status" != "OK" ]]; then
 			issues+=("DATASHEET_$ds_status|$datasheet")
 		fi
@@ -188,7 +196,7 @@ verify_symbol() {
 
 	# Check 5: DigiKey (optional, for statistics)
 	if [[ -z "$digikey" ]]; then
-		((VERIFY_STATS[missing_digikey]++)) || true
+		((VERIFY_STATS_MISSING_DIGIKEY++)) || true
 	fi
 
 	# Store result
@@ -199,11 +207,11 @@ verify_symbol() {
 			echo "${issues[*]}"
 		)
 		VERIFY_RESULTS+=("$filename|$symbol|ISSUES|$issues_str")
-		((VERIFY_STATS[issue_symbols]++)) || true
+		((VERIFY_STATS_ISSUE_SYMBOLS++)) || true
 		return 1
 	else
 		VERIFY_RESULTS+=("$filename|$symbol|OK|")
-		((VERIFY_STATS[ok_symbols]++)) || true
+		((VERIFY_STATS_OK_SYMBOLS++)) || true
 		return 0
 	fi
 }
@@ -211,9 +219,9 @@ verify_symbol() {
 # @IMPL-VERIFY-006@ (FROM: @ARCH-VERIFY-001@)
 # Print detailed verification report
 print_verify_report() {
-	local total=${VERIFY_STATS[total_symbols]}
-	local ok=${VERIFY_STATS[ok_symbols]}
-	local issue_count=${VERIFY_STATS[issue_symbols]}
+	local total=${VERIFY_STATS_TOTAL_SYMBOLS}
+	local ok=${VERIFY_STATS_OK_SYMBOLS}
+	local issue_count=${VERIFY_STATS_ISSUE_SYMBOLS}
 
 	echo ""
 	echo "=========================================="
@@ -226,10 +234,10 @@ print_verify_report() {
 
 	if [[ $issue_count -gt 0 ]]; then
 		echo "Issues Breakdown:"
-		echo "  • Missing Footprint: ${VERIFY_STATS[missing_footprint]}"
-		echo "  • Missing Datasheet: ${VERIFY_STATS[missing_datasheet]}"
-		echo "  • Broken Datasheet: ${VERIFY_STATS[broken_datasheet]}"
-		echo "  • Missing DigiKey: ${VERIFY_STATS[missing_digikey]}"
+		echo "  • Missing Footprint: ${VERIFY_STATS_MISSING_FOOTPRINT}"
+		echo "  • Missing Datasheet: ${VERIFY_STATS_MISSING_DATASHEET}"
+		echo "  • Broken Datasheet: ${VERIFY_STATS_BROKEN_DATASHEET}"
+		echo "  • Missing DigiKey: ${VERIFY_STATS_MISSING_DIGIKEY}"
 		echo ""
 
 		if [[ ${#VERIFY_RESULTS[@]} -gt 0 ]]; then

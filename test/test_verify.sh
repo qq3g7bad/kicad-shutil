@@ -127,13 +127,13 @@ setUp() {
 testInitVerifyStats() {
 	init_verify_stats
 
-	assertEquals "0" "${VERIFY_STATS[total_symbols]}"
-	assertEquals "0" "${VERIFY_STATS[ok_symbols]}"
-	assertEquals "0" "${VERIFY_STATS[issue_symbols]}"
-	assertEquals "0" "${VERIFY_STATS[missing_footprint]}"
-	assertEquals "0" "${VERIFY_STATS[missing_datasheet]}"
-	assertEquals "0" "${VERIFY_STATS[broken_datasheet]}"
-	assertEquals "0" "${VERIFY_STATS[missing_digikey]}"
+	assertEquals "0" "${VERIFY_STATS_TOTAL_SYMBOLS}"
+	assertEquals "0" "${VERIFY_STATS_OK_SYMBOLS}"
+	assertEquals "0" "${VERIFY_STATS_ISSUE_SYMBOLS}"
+	assertEquals "0" "${VERIFY_STATS_MISSING_FOOTPRINT}"
+	assertEquals "0" "${VERIFY_STATS_MISSING_DATASHEET}"
+	assertEquals "0" "${VERIFY_STATS_BROKEN_DATASHEET}"
+	assertEquals "0" "${VERIFY_STATS_MISSING_DIGIKEY}"
 }
 
 #-----------------------------------
@@ -145,9 +145,9 @@ testVerifySymbolValid() {
 
 	verify_symbol "$TEST_SYMBOL_FILE" "$symbols_data" "ValidSymbol"
 
-	assertEquals "1" "${VERIFY_STATS[total_symbols]}"
-	assertEquals "1" "${VERIFY_STATS[ok_symbols]}"
-	assertEquals "0" "${VERIFY_STATS[issue_symbols]}"
+	assertEquals "1" "${VERIFY_STATS_TOTAL_SYMBOLS}"
+	assertEquals "1" "${VERIFY_STATS_OK_SYMBOLS}"
+	assertEquals "0" "${VERIFY_STATS_ISSUE_SYMBOLS}"
 }
 
 #-----------------------------------
@@ -159,10 +159,10 @@ testVerifySymbolMissingFootprint() {
 
 	verify_symbol "$TEST_SYMBOL_FILE" "$symbols_data" "MissingFootprint"
 
-	assertEquals "1" "${VERIFY_STATS[total_symbols]}"
-	assertEquals "0" "${VERIFY_STATS[ok_symbols]}"
-	assertEquals "1" "${VERIFY_STATS[issue_symbols]}"
-	assertEquals "1" "${VERIFY_STATS[missing_footprint]}"
+	assertEquals "1" "${VERIFY_STATS_TOTAL_SYMBOLS}"
+	assertEquals "0" "${VERIFY_STATS_OK_SYMBOLS}"
+	assertEquals "1" "${VERIFY_STATS_ISSUE_SYMBOLS}"
+	assertEquals "1" "${VERIFY_STATS_MISSING_FOOTPRINT}"
 }
 
 #-----------------------------------
@@ -174,10 +174,10 @@ testVerifySymbolMissingDatasheet() {
 
 	verify_symbol "$TEST_SYMBOL_FILE" "$symbols_data" "MissingDatasheet"
 
-	assertEquals "1" "${VERIFY_STATS[total_symbols]}"
-	assertEquals "0" "${VERIFY_STATS[ok_symbols]}"
-	assertEquals "1" "${VERIFY_STATS[issue_symbols]}"
-	assertEquals "1" "${VERIFY_STATS[missing_datasheet]}"
+	assertEquals "1" "${VERIFY_STATS_TOTAL_SYMBOLS}"
+	assertEquals "0" "${VERIFY_STATS_OK_SYMBOLS}"
+	assertEquals "1" "${VERIFY_STATS_ISSUE_SYMBOLS}"
+	assertEquals "1" "${VERIFY_STATS_MISSING_DATASHEET}"
 }
 
 #-----------------------------------
@@ -189,10 +189,10 @@ testVerifySymbolBrokenDatasheet() {
 
 	verify_symbol "$TEST_SYMBOL_FILE" "$symbols_data" "BrokenDatasheet"
 
-	assertEquals "1" "${VERIFY_STATS[total_symbols]}"
-	assertEquals "0" "${VERIFY_STATS[ok_symbols]}"
-	assertEquals "1" "${VERIFY_STATS[issue_symbols]}"
-	assertEquals "1" "${VERIFY_STATS[broken_datasheet]}"
+	assertEquals "1" "${VERIFY_STATS_TOTAL_SYMBOLS}"
+	assertEquals "0" "${VERIFY_STATS_OK_SYMBOLS}"
+	assertEquals "1" "${VERIFY_STATS_ISSUE_SYMBOLS}"
+	assertEquals "1" "${VERIFY_STATS_BROKEN_DATASHEET}"
 }
 
 #-----------------------------------
@@ -204,10 +204,10 @@ testVerifySymbolMissingVendors() {
 
 	verify_symbol "$TEST_SYMBOL_FILE" "$symbols_data" "MissingVendors"
 
-	assertEquals "1" "${VERIFY_STATS[total_symbols]}"
-	assertEquals "1" "${VERIFY_STATS[ok_symbols]}"
-	assertEquals "0" "${VERIFY_STATS[issue_symbols]}"
-	assertEquals "1" "${VERIFY_STATS[missing_digikey]}"
+	assertEquals "1" "${VERIFY_STATS_TOTAL_SYMBOLS}"
+	assertEquals "1" "${VERIFY_STATS_OK_SYMBOLS}"
+	assertEquals "0" "${VERIFY_STATS_ISSUE_SYMBOLS}"
+	assertEquals "1" "${VERIFY_STATS_MISSING_DIGIKEY}"
 }
 
 #-----------------------------------
@@ -219,9 +219,9 @@ testVerifyFile() {
 
 	verify_file "$TEST_SYMBOL_FILE" "$symbols_data" 2>/dev/null
 
-	assertEquals "5" "${VERIFY_STATS[total_symbols]}"
-	assertEquals "2" "${VERIFY_STATS[ok_symbols]}"
-	assertEquals "3" "${VERIFY_STATS[issue_symbols]}"
+	assertEquals "5" "${VERIFY_STATS_TOTAL_SYMBOLS}"
+	assertEquals "2" "${VERIFY_STATS_OK_SYMBOLS}"
+	assertEquals "3" "${VERIFY_STATS_ISSUE_SYMBOLS}"
 }
 
 #-----------------------------------
@@ -236,11 +236,11 @@ testStatisticsAccumulation() {
 	verify_symbol "$TEST_SYMBOL_FILE" "$symbols_data" "MissingFootprint"
 	verify_symbol "$TEST_SYMBOL_FILE" "$symbols_data" "MissingDatasheet"
 
-	assertEquals "3" "${VERIFY_STATS[total_symbols]}"
-	assertEquals "1" "${VERIFY_STATS[ok_symbols]}"
-	assertEquals "2" "${VERIFY_STATS[issue_symbols]}"
-	assertEquals "1" "${VERIFY_STATS[missing_footprint]}"
-	assertEquals "1" "${VERIFY_STATS[missing_datasheet]}"
+	assertEquals "3" "${VERIFY_STATS_TOTAL_SYMBOLS}"
+	assertEquals "1" "${VERIFY_STATS_OK_SYMBOLS}"
+	assertEquals "2" "${VERIFY_STATS_ISSUE_SYMBOLS}"
+	assertEquals "1" "${VERIFY_STATS_MISSING_FOOTPRINT}"
+	assertEquals "1" "${VERIFY_STATS_MISSING_DATASHEET}"
 }
 
 #-----------------------------------

@@ -6,10 +6,62 @@
 # Handle Ctrl-C in subshells
 trap 'exit 130' INT TERM
 
-# Global variables for KiCad environment
-declare -A KICAD_ENV
-declare KICAD_ENV_LOADED=""
-declare -A KICAD_UNRESOLVED_VARS
+# Global variables for KiCad environment (bash 3.2 compatible)
+# Format: "key1|value1\nkey2|value2\n..."
+KICAD_ENV=""
+KICAD_ENV_LOADED=""
+KICAD_UNRESOLVED_VARS=""
+
+# Helper: Set key-value in KICAD_ENV
+kicad_env_set() {
+	local key="$1"
+	local value="$2"
+	# Remove existing entry if present
+	KICAD_ENV=$(echo "$KICAD_ENV" | grep -v "^${key}|" || true)
+	# Add new entry
+	KICAD_ENV="${KICAD_ENV}${key}|${value}"$'\n'
+}
+
+# Helper: Get value from KICAD_ENV
+kicad_env_get() {
+	local key="$1"
+	echo "$KICAD_ENV" | grep "^${key}|" | head -1 | cut -d'|' -f2-
+}
+
+# Helper: Count entries in KICAD_ENV
+kicad_env_count() {
+	echo "$KICAD_ENV" | grep -c '^[^[:space:]]' || echo "0"
+}
+
+# Helper: List all keys in KICAD_ENV
+kicad_env_list_keys() {
+	echo "$KICAD_ENV" | grep '^[^[:space:]]' | cut -d'|' -f1
+}
+
+# Helper: Add variable to unresolved list
+kicad_unresolved_add() {
+	local var_name="$1"
+	# Only add if not already in list
+	if ! echo "$KICAD_UNRESOLVED_VARS" | grep -q "^${var_name}$"; then
+		KICAD_UNRESOLVED_VARS="${KICAD_UNRESOLVED_VARS}${var_name}"$'\n'
+	fi
+}
+
+# Helper: Check if variable is in unresolved list
+kicad_unresolved_has() {
+	local var_name="$1"
+	echo "$KICAD_UNRESOLVED_VARS" | grep -q "^${var_name}$"
+}
+
+# Helper: Count unresolved variables
+kicad_unresolved_count() {
+	echo "$KICAD_UNRESOLVED_VARS" | grep -c '^[^[:space:]]' || echo "0"
+}
+
+# Helper: List all unresolved variables
+kicad_unresolved_list() {
+	echo "$KICAD_UNRESOLVED_VARS" | grep '^[^[:space:]]'
+}
 
 # Normalize path to absolute clean path
 # Usage: normalize_path <path>
@@ -52,9 +104,20 @@ verify_table_file() {
 	local table_content
 	table_content=$(cat "$table_file")
 
-	# Extract library entries
+	# Extract library entries using awk (BSD compatible)
 	local entries
-	entries=$(echo "$table_content" | grep -oP '\(lib\s+\(name\s+"[^"]+"\).*?\)(?=\s*\(lib|\s*\)$)')
+	entries=$(echo "$table_content" | awk '
+		/^[[:space:]]*\(lib[[:space:]]+\(name[[:space:]]+"[^"]+"/ {
+			entry = $0
+			paren_depth = gsub(/\(/, "&") - gsub(/\)/, "&")
+			while (paren_depth > 0 && getline > 0) {
+				entry = entry "\n" $0
+				paren_depth += gsub(/\(/, "&") - gsub(/\)/, "&")
+			}
+			print entry
+			print "---LIBSEP---"
+		}
+	')
 
 	if [[ -z "$entries" ]]; then
 		warn "No library entries found in $table_file"
@@ -69,7 +132,8 @@ verify_table_file() {
 
 	# Parse each library entry
 	while IFS= read -r entry; do
-		if [[ -z "$entry" ]]; then
+		# Skip separator lines
+		if [[ "$entry" == "---LIBSEP---" ]] || [[ -z "$entry" ]]; then
 			continue
 		fi
 
@@ -80,11 +144,11 @@ verify_table_file() {
 
 		((total++))
 
-		# Extract library properties
+		# Extract library properties using sed (BSD compatible)
 		local lib_name
-		lib_name=$(echo "$entry" | grep -oP '\(name\s+"\K[^"]+')
+		lib_name=$(echo "$entry" | sed -n 's/.*\(name[[:space:]]*"\([^"]*\)".*/\1/p')
 		local lib_uri
-		lib_uri=$(echo "$entry" | grep -oP '\(uri\s+"\K[^"]+')
+		lib_uri=$(echo "$entry" | sed -n 's/.*\(uri[[:space:]]*"\([^"]*\)".*/\1/p')
 
 		if [[ -z "$lib_uri" ]]; then
 			warn "$lib_name:No URI specified"
@@ -149,9 +213,14 @@ resolve_kicad_path() {
 	while [[ $iteration -lt $max_iterations ]]; do
 		((iteration++))
 
-		# Extract all ${VAR} patterns in current resolved string
+		# Extract all ${VAR} patterns using awk (BSD compatible)
 		local vars
-		vars=$(echo "$resolved" | grep -oP '\$\{[^}]+\}' | sort -u)
+		vars=$(echo "$resolved" | awk '{
+			while ((pos = match($0, /\$\{[^}]+\}/)) > 0) {
+				print substr($0, RSTART, RLENGTH)
+				$0 = substr($0, RSTART + RLENGTH)
+			}
+		}' | sort -u)
 
 		# If no more variables to expand, we're done
 		if [[ -z "$vars" ]]; then
@@ -169,7 +238,7 @@ resolve_kicad_path() {
 
 			if [[ -z "$var_value" ]]; then
 				# Try to get from KiCad environment
-				var_value="${KICAD_ENV[$var_name]:-}"
+				var_value=$(kicad_env_get "$var_name")
 			fi
 
 			if [[ -n "$var_value" ]]; then
@@ -192,7 +261,7 @@ resolve_kicad_path() {
 					fi
 				else
 					# Track unresolved variable for verbose summary
-					KICAD_UNRESOLVED_VARS["$var_name"]="1"
+					kicad_unresolved_add "$var_name"
 				fi
 				return 1
 			fi
@@ -205,7 +274,7 @@ resolve_kicad_path() {
 	done
 
 	# Check if we hit max iterations (circular reference)
-	if [[ $iteration -eq $max_iterations ]] && echo "$resolved" | grep -qP '\$\{[^}]+\}'; then
+	if [[ $iteration -eq $max_iterations ]] && echo "$resolved" | grep -qE '\$\{[^}]+\}'; then
 		warn "Circular or too deeply nested environment variable references in: $path"
 		return 1
 	fi
@@ -261,27 +330,27 @@ load_kicad_environment() {
 
 	# Set standard KiCad environment variables
 	if [[ -n "$symbol_dir" ]]; then
-		KICAD_ENV[KICAD7_SYMBOL_DIR]="$symbol_dir"
-		KICAD_ENV[KICAD_SYMBOL_DIR]="$symbol_dir" # v6 compat
+		kicad_env_set "KICAD7_SYMBOL_DIR" "$symbol_dir"
+		kicad_env_set "KICAD_SYMBOL_DIR" "$symbol_dir" # v6 compat
 	fi
 
 	if [[ -n "$footprint_dir" ]]; then
-		KICAD_ENV[KICAD7_FOOTPRINT_DIR]="$footprint_dir"
-		KICAD_ENV[KICAD_FOOTPRINT_DIR]="$footprint_dir" # v6 compat
+		kicad_env_set "KICAD7_FOOTPRINT_DIR" "$footprint_dir"
+		kicad_env_set "KICAD_FOOTPRINT_DIR" "$footprint_dir" # v6 compat
 	fi
 
 	if [[ -n "$model_3d_dir" ]]; then
-		KICAD_ENV[KICAD7_3DMODEL_DIR]="$model_3d_dir"
-		KICAD_ENV[KICAD_3DMODEL_DIR]="$model_3d_dir" # v6 compat
+		kicad_env_set "KICAD7_3DMODEL_DIR" "$model_3d_dir"
+		kicad_env_set "KICAD_3DMODEL_DIR" "$model_3d_dir" # v6 compat
 	fi
 
 	# Parse custom variables from kicad_common.json if it exists
 	if [[ -f "$config_file" ]]; then
-		# Get custom vars from environment.vars section
+		# Get custom vars from environment.vars section using awk (BSD compatible)
 		local custom_vars
 		custom_vars=$(grep -A 100 '"environment"' "$config_file" \
 			| grep -A 50 '"vars"' \
-			| grep -oP '"\K[^"]+(?="\s*:\s*")' || true)
+			| awk -F'"' '/"[^"]+"[[:space:]]*:[[:space:]]*"/ {print $2}' || true)
 
 		# Read each custom variable
 		while IFS= read -r var_name; do
@@ -289,14 +358,21 @@ load_kicad_environment() {
 				continue
 			fi
 
-			# Extract value
+			# Extract value using awk (BSD compatible)
 			local var_value
 			var_value=$(grep -A 100 '"environment"' "$config_file" \
 				| grep -A 50 '"vars"' \
-				| grep -oP "\"$var_name\"\s*:\s*\"\K[^\"]+")
-
+				| awk -F'"' -v var="$var_name" '
+					$0 ~ "\"" var "\"[[:space:]]*:[[:space:]]*\"" {
+						for (i=1; i<=NF; i++) {
+							if ($i == var && $(i+2) !~ /[:,{}]/) {
+								print $(i+2)
+								exit
+							}
+						}
+					}')
 			if [[ -n "$var_value" ]]; then
-				KICAD_ENV[$var_name]="$var_value"
+				kicad_env_set "$var_name" "$var_value"
 			fi
 		done <<<"$custom_vars"
 	else
@@ -307,22 +383,25 @@ load_kicad_environment() {
 	for var in KICAD7_SYMBOL_DIR KICAD7_FOOTPRINT_DIR KICAD7_3DMODEL_DIR \
 		KIPRJMOD KICAD_USER_TEMPLATE_DIR; do
 		if [[ -n "${!var:-}" ]]; then
-			KICAD_ENV[$var]="${!var}"
+			kicad_env_set "$var" "${!var}"
 		fi
 	done
 
 	KICAD_ENV_LOADED="1"
 
 	# Debug: show loaded environment (only on first load)
-	local var_count=${#KICAD_ENV[@]}
+	local var_count
+	var_count=$(kicad_env_count)
 	if [[ $var_count -gt 0 ]]; then
 		# Show all environment variables only once
 		if [[ "${_KICAD_ENV_MSG_SHOWN:-0}" != "1" ]]; then
 			env_info "Loaded $var_count KiCad environment variables"
 			# Sort and display all variables
-			for var_name in "${!KICAD_ENV[@]}"; do
-				env_info "${var_name}=${KICAD_ENV[$var_name]}"
-			done | sort
+			while IFS= read -r var_name; do
+				local var_value
+				var_value=$(kicad_env_get "$var_name")
+				env_info "${var_name}=${var_value}"
+			done < <(kicad_env_list_keys) | sort
 			_KICAD_ENV_MSG_SHOWN="1"
 		fi
 	else
@@ -335,19 +414,19 @@ load_kicad_environment() {
 
 # Show summary of unresolved environment variables (verbose mode only)
 show_env_summary() {
-	# Check if array has any elements (safe for set -u)
-	if [[ -z "${KICAD_UNRESOLVED_VARS[*]+_}" ]] || [[ "${#KICAD_UNRESOLVED_VARS[@]}" -eq 0 ]]; then
+	local unresolved_count
+	unresolved_count=$(kicad_unresolved_count)
+
+	if [[ "$unresolved_count" -eq 0 ]]; then
 		return 0
 	fi
-
-	local unresolved_count="${#KICAD_UNRESOLVED_VARS[@]}"
 
 	env_info ""
 	env_info "=== Unresolved Environment Variables ==="
 	env_info "Found $unresolved_count unresolved environment variable(s):"
-	for var_name in "${!KICAD_UNRESOLVED_VARS[@]}"; do
+	while IFS= read -r var_name; do
 		env_info "  - $var_name"
-	done | sort
+	done < <(kicad_unresolved_list) | sort
 	env_info ""
 	env_info "These variables were referenced in library paths but not found in:"
 	env_info "  - kicad_common.json"

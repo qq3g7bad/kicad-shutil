@@ -209,8 +209,27 @@ verify_symbol_libraries() {
 	local missing_datasheet=0
 	local broken_datasheet=0
 
-	# Build a map of available footprints from fp-lib-table
-	declare -A footprint_map
+	# Build a map of available footprints from fp-lib-table (bash 3.2 compatible)
+	# Format: "key1|value1\nkey2|value2\n..."
+	local footprint_map=""
+
+	# Helper: Add footprint to map
+	local_fp_map_set() {
+		local key="$1"
+		local value="$2"
+		footprint_map="${footprint_map}${key}|${value}"$'\n'
+	}
+
+	# Helper: Get footprint from map
+	local_fp_map_get() {
+		local key="$1"
+		echo "$footprint_map" | grep "^${key}|" | head -1 | cut -d'|' -f2-
+	}
+
+	# Helper: Check if map has any entries
+	local_fp_map_has_entries() {
+		[[ -n "$footprint_map" ]]
+	}
 	if [[ -n "$fp_table" && -f "$fp_table" ]]; then
 		# Load KiCad environment for path resolution
 		if [[ -z "$KICAD_ENV_LOADED" ]]; then
@@ -221,10 +240,22 @@ verify_symbol_libraries() {
 		local table_content
 		table_content=$(cat "$fp_table")
 		local fp_entries
-		fp_entries=$(echo "$table_content" | grep -oP '\(lib\s+\(name\s+"[^"]+"\).*?\)(?=\s*\(lib|\s*\)$)')
+		fp_entries=$(echo "$table_content" | awk '
+			/^[[:space:]]*\(lib[[:space:]]+\(name[[:space:]]+"[^"]+"/ {
+				entry = $0
+				paren_depth = gsub(/\(/, "&") - gsub(/\)/, "&")
+				while (paren_depth > 0 && getline > 0) {
+					entry = entry "\n" $0
+					paren_depth += gsub(/\(/, "&") - gsub(/\)/, "&")
+				}
+				print entry
+				print "---LIBSEP---"
+			}
+		')
 
 		while IFS= read -r entry; do
-			if [[ -z "$entry" ]]; then
+			# Skip separator lines
+			if [[ "$entry" == "---LIBSEP---" ]] || [[ -z "$entry" ]]; then
 				continue
 			fi
 
@@ -234,9 +265,9 @@ verify_symbol_libraries() {
 			fi
 
 			local lib_name
-			lib_name=$(echo "$entry" | grep -oP '\(name\s+"\K[^"]+')
+			lib_name=$(echo "$entry" | sed -n 's/.*\(name[[:space:]]*"\([^"]*\)".*/\2/p')
 			local lib_uri
-			lib_uri=$(echo "$entry" | grep -oP '\(uri\s+"\K[^"]+')
+			lib_uri=$(echo "$entry" | sed -n 's/.*\(uri[[:space:]]*"\([^"]*\)".*/\2/p')
 
 			if [[ -z "$lib_uri" ]]; then
 				continue
@@ -259,7 +290,7 @@ verify_symbol_libraries() {
 				local fp_name
 				fp_name=$(basename "$mod_file" .kicad_mod)
 				# Store as "LibraryName:FootprintName" -> full_path
-				footprint_map["$lib_name:$fp_name"]="$mod_file"
+				local_fp_map_set "$lib_name:$fp_name" "$mod_file"
 			done <<<"$mod_files"
 		done <<<"$fp_entries"
 	fi
@@ -274,10 +305,22 @@ verify_symbol_libraries() {
 	local table_content
 	table_content=$(cat "$sym_table")
 	local entries
-	entries=$(echo "$table_content" | grep -oP '\(lib\s+\(name\s+"[^"]+"\).*?\)(?=\s*\(lib|\s*\)$)')
+	entries=$(echo "$table_content" | awk '
+		/^[[:space:]]*\(lib[[:space:]]+\(name[[:space:]]+"[^"]+"/ {
+			entry = $0
+			paren_depth = gsub(/\(/, "&") - gsub(/\)/, "&")
+			while (paren_depth > 0 && getline > 0) {
+				entry = entry "\n" $0
+				paren_depth += gsub(/\(/, "&") - gsub(/\)/, "&")
+			}
+			print entry
+			print "---LIBSEP---"
+		}
+	')
 
 	while IFS= read -r entry; do
-		if [[ -z "$entry" ]]; then
+		# Skip separator lines
+		if [[ "$entry" == "---LIBSEP---" ]] || [[ -z "$entry" ]]; then
 			continue
 		fi
 
@@ -288,9 +331,9 @@ verify_symbol_libraries() {
 		fi
 
 		local lib_name
-		lib_name=$(echo "$entry" | grep -oP '\(name\s+"\K[^"]+')
+		lib_name=$(echo "$entry" | sed -n 's/.*\(name[[:space:]]*"\([^"]*\)".*/\2/p')
 		local lib_uri
-		lib_uri=$(echo "$entry" | grep -oP '\(uri\s+"\K[^"]+')
+		lib_uri=$(echo "$entry" | sed -n 's/.*\(uri[[:space:]]*"\([^"]*\)".*/\2/p')
 
 		if [[ -z "$lib_uri" ]]; then
 			continue
@@ -331,8 +374,8 @@ verify_symbol_libraries() {
 			else
 				# Verify footprint file exists
 				# Footprint format: "LibraryName:FootprintName"
-				if [[ ${#footprint_map[@]} -gt 0 ]]; then
-					if [[ -z "${footprint_map[$footprint]:-}" ]]; then
+				if local_fp_map_has_entries; then
+					if [[ -z "$(local_fp_map_get "$footprint")" ]]; then
 						((footprint_not_found++))
 						if [[ "${VERBOSE:-false}" == "true" ]]; then
 							echo "${COLOR_RED}[ERROR]${COLOR_RESET}	${COLOR_CYAN}sym-lib${COLOR_RESET}	$lib_name	$symbol	FOOTPRINT_NOT_FOUND	$footprint" >&2
@@ -397,10 +440,22 @@ verify_footprint_libraries() {
 	local table_content
 	table_content=$(cat "$fp_table")
 	local entries
-	entries=$(echo "$table_content" | grep -oP '\(lib\s+\(name\s+"[^"]+"\).*?\)(?=\s*\(lib|\s*\)$)')
+	entries=$(echo "$table_content" | awk '
+		/^[[:space:]]*\(lib[[:space:]]+\(name[[:space:]]+"[^"]+"/ {
+			entry = $0
+			paren_depth = gsub(/\(/, "&") - gsub(/\)/, "&")
+			while (paren_depth > 0 && getline > 0) {
+				entry = entry "\n" $0
+				paren_depth += gsub(/\(/, "&") - gsub(/\)/, "&")
+			}
+			print entry
+			print "---LIBSEP---"
+		}
+	')
 
 	while IFS= read -r entry; do
-		if [[ -z "$entry" ]]; then
+		# Skip separator lines
+		if [[ "$entry" == "---LIBSEP---" ]] || [[ -z "$entry" ]]; then
 			continue
 		fi
 
@@ -410,9 +465,9 @@ verify_footprint_libraries() {
 		fi
 
 		local lib_name
-		lib_name=$(echo "$entry" | grep -oP '\(name\s+"\K[^"]+')
+		lib_name=$(echo "$entry" | sed -n 's/.*\(name[[:space:]]*"\([^"]*\)".*/\2/p')
 		local lib_uri
-		lib_uri=$(echo "$entry" | grep -oP '\(uri\s+"\K[^"]+')
+		lib_uri=$(echo "$entry" | sed -n 's/.*\(uri[[:space:]]*"\([^"]*\)".*/\2/p')
 
 		if [[ -z "$lib_uri" ]]; then
 			continue

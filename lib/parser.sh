@@ -33,10 +33,13 @@ parse_file() {
     }
 
     # Detect main symbol start: (symbol "NAME" where NAME doesnt match _N_M pattern
-    /^\s*\(symbol "[^"]+"/ {
-        # Extract the candidate symbol name
-        match($0, /\(symbol "([^"]+)"/, arr)
-        candidate_name = arr[1]
+    /^[[:space:]]*\(symbol "[^"]+"/ {
+        # Extract the candidate symbol name (BSD awk compatible)
+        candidate_name = ""
+        pos = match($0, /"[^"]+"/)
+        if (pos > 0) {
+            candidate_name = substr($0, RSTART+1, RLENGTH-2)
+        }
 
         # Check if this is a nested graphical symbol (contains _N_M pattern at end)
         # Pattern: NAME_1_1, NAME_2_1, NAME_0_0, etc.
@@ -57,15 +60,27 @@ parse_file() {
     }
 
     # Track properties while in main symbol (before nested symbols)
-    in_symbol && !property_section_done && /^\s*\(property "[^"]+"/ {
+    in_symbol && !property_section_done && /^[[:space:]]*\(property "[^"]+"/ {
         in_property = 1
         property_depth = 0
 
-        # Extract property name and value
+        # Extract property name and value (BSD awk compatible)
         # Handle multi-line by only capturing on the opening line
-        if (match($0, /\(property "([^"]+)" "([^"]*)"/, prop)) {
-            properties[prop[1]] = prop[2]
-            prop_lines[prop[1]] = NR
+        if ($0 ~ /\(property "[^"]+" "[^"]*"/) {
+            # Find first quoted string (property name)
+            line = $0
+            pos = match(line, /"[^"]+"/)
+            if (pos > 0) {
+                prop_name = substr(line, RSTART+1, RLENGTH-2)
+                # Remove first quoted part and find second quoted string (value)
+                line = substr(line, RSTART+RLENGTH)
+                pos = match(line, /"[^"]*"/)
+                if (pos > 0) {
+                    prop_value = substr(line, RSTART+1, RLENGTH-2)
+                    properties[prop_name] = prop_value
+                    prop_lines[prop_name] = NR
+                }
+            }
         }
     }
 
