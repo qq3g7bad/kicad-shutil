@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 
+# @IMPL-DIGIKEY-001@ (FROM: @ARCH-DIGIKEY-001@)
 # digikey.sh - DigiKey API integration module for kicad-shutil
 # Search and retrieve DigiKey part numbers and URLs using official API
 #
@@ -47,8 +48,8 @@ process_digikey() {
 
 		# Check if DigiKey info already exists
 		local existing_dk
-		existing_dk=$(get_property "$symbols_data" "$symbol" "DigiKey")
 		local existing_url
+		existing_dk=$(get_property "$symbols_data" "$symbol" "DigiKey")
 		existing_url=$(get_property "$symbols_data" "$symbol" "DigiKey URL")
 
 		if [[ -n "$existing_dk" ]] && [[ -n "$existing_url" ]]; then
@@ -87,16 +88,16 @@ process_digikey() {
 		if [[ $candidate_count -eq 1 ]]; then
 			# Single match - auto-select
 			local dk_part
-			dk_part=$(echo "$candidates" | cut -d'|' -f1)
 			local dk_url
-			dk_url=$(echo "$candidates" | cut -d'|' -f2)
 			local dk_desc
-			dk_desc=$(echo "$candidates" | cut -d'|' -f3)
 			local dk_detailed_desc
-			dk_detailed_desc=$(echo "$candidates" | cut -d'|' -f4)
 			local dk_price
-			dk_price=$(echo "$candidates" | cut -d'|' -f5)
 			local dk_moq
+			dk_part=$(echo "$candidates" | cut -d'|' -f1)
+			dk_url=$(echo "$candidates" | cut -d'|' -f2)
+			dk_desc=$(echo "$candidates" | cut -d'|' -f3)
+			dk_detailed_desc=$(echo "$candidates" | cut -d'|' -f4)
+			dk_price=$(echo "$candidates" | cut -d'|' -f5)
 			dk_moq=$(echo "$candidates" | cut -d'|' -f6)
 
 			info "    [$symbol] Found: $dk_part (\$$dk_price/ea, MOQ: $dk_moq)"
@@ -178,24 +179,22 @@ get_digikey_token() {
 	# Request new token
 	start_spinner "Obtaining DigiKey API token"
 	local response
-	response=$(curl -sS -X POST "$DIGIKEY_TOKEN_URL" \
+	if ! response=$(curl -sS -X POST "$DIGIKEY_TOKEN_URL" \
 		-H "Content-Type: application/x-www-form-urlencoded" \
 		-d "client_id=${DIGIKEY_CLIENT_ID}" \
 		-d "client_secret=${DIGIKEY_CLIENT_SECRET}" \
 		-d "grant_type=client_credentials" \
-		2>&1)
-	local curl_exit=$?
-	stop_spinner
-
-	if [[ $curl_exit -ne 0 ]]; then
+		2>&1); then
+		stop_spinner
 		error "Failed to obtain DigiKey API token"
 		return 1
 	fi
+	stop_spinner
 
 	# Parse token and expiry from JSON response (using awk instead of jq)
 	local token
-	token=$(echo "$response" | awk -F'"' '/"access_token"/ { for(i=1; i<=NF; i++) if($i=="access_token") { print $(i+2); exit } }')
 	local expires_in
+	token=$(echo "$response" | awk -F'"' '/"access_token"/ { for(i=1; i<=NF; i++) if($i=="access_token") { print $(i+2); exit } }')
 	expires_in=$(echo "$response" | awk -F'[,:}]' '/"expires_in"/ { for(i=1; i<=NF; i++) if($i ~ /expires_in/) { gsub(/[^0-9]/, "", $(i+1)); print $(i+1); exit } }')
 
 	# Set default if parsing fails
@@ -258,7 +257,7 @@ EOF
 	# Make API request
 	start_spinner "Querying DigiKey API"
 	local response
-	response=$(curl -sS -X POST "$DIGIKEY_SEARCH_URL" \
+	if ! response=$(curl -sS -X POST "$DIGIKEY_SEARCH_URL" \
 		-H "Authorization: Bearer $token" \
 		-H "X-DIGIKEY-Client-Id: ${DIGIKEY_CLIENT_ID}" \
 		-H "Content-Type: application/json" \
@@ -266,14 +265,12 @@ EOF
 		-H "X-DIGIKEY-Locale-Language: en" \
 		-H "X-DIGIKEY-Locale-Currency: USD" \
 		-d "$request_body" \
-		2>&1)
-	local curl_exit=$?
-	stop_spinner
-
-	if [[ $curl_exit -ne 0 ]]; then
+		2>&1); then
+		stop_spinner
 		warn "DigiKey API request failed"
 		return 1
 	fi
+	stop_spinner
 
 	# Parse response
 	parse_digikey_api_response "$response" >"$cache_file"
@@ -308,65 +305,43 @@ parse_digikey_api_response() {
         for (p = v-1; p >= 1; p--) {
           prev = variations[p]
           
-          # Extract ProductUrl (BSD awk compatible - using split and gsub)
-          if (prev ~ /"ProductUrl"[[:space:]]*:[[:space:]]*"/) {
-            # Extract value between quotes after "ProductUrl":
-            temp = prev
-            gsub(/.*"ProductUrl"[[:space:]]*:[[:space:]]*"/, "", temp)
-            gsub(/".*/, "", temp)
-            product_url = temp
+          # Extract ProductUrl
+          if (match(prev, /"ProductUrl"[[:space:]]*:[[:space:]]*"([^"]*)"/, arr)) {
+            product_url = arr[1]
           }
-
-          # Extract ProductDescription (BSD awk compatible - using split and gsub)
-          if (prev ~ /"ProductDescription"[[:space:]]*:[[:space:]]*"/) {
-            temp = prev
-            gsub(/.*"ProductDescription"[[:space:]]*:[[:space:]]*"/, "", temp)
-            gsub(/".*/, "", temp)
-            product_desc = temp
+          
+          # Extract ProductDescription
+          if (match(prev, /"ProductDescription"[[:space:]]*:[[:space:]]*"([^"]*)"/, arr)) {
+            product_desc = arr[1]
           }
-
-          # Extract DetailedDescription (BSD awk compatible - using split and gsub)
-          if (prev ~ /"DetailedDescription"[[:space:]]*:[[:space:]]*"/) {
-            temp = prev
-            gsub(/.*"DetailedDescription"[[:space:]]*:[[:space:]]*"/, "", temp)
-            gsub(/".*/, "", temp)
-            detailed_desc = temp
+          
+          # Extract DetailedDescription
+          if (match(prev, /"DetailedDescription"[[:space:]]*:[[:space:]]*"([^"]*)"/, arr)) {
+            detailed_desc = arr[1]
           }
           
           if (product_url != "") break
         }
         
-        # Extract variation-level fields (BSD awk compatible)
-        if (variation ~ /"DigiKeyProductNumber"[[:space:]]*:[[:space:]]*"/) {
-          temp = variation
-          gsub(/.*"DigiKeyProductNumber"[[:space:]]*:[[:space:]]*"/, "", temp)
-          gsub(/".*/, "", temp)
-          dkpn = temp
+        # Extract variation-level fields
+        if (match(variation, /"DigiKeyProductNumber"[[:space:]]*:[[:space:]]*"([^"]*)"/, arr)) {
+          dkpn = arr[1]
         }
-
-        if (variation ~ /"UnitPrice"[[:space:]]*:[[:space:]]*[0-9.]+/) {
-          temp = variation
-          gsub(/.*"UnitPrice"[[:space:]]*:[[:space:]]*/, "", temp)
-          gsub(/[^0-9.].*/, "", temp)
-          price = temp
+        
+        if (match(variation, /"UnitPrice"[[:space:]]*:[[:space:]]*([0-9.]+)/, arr)) {
+          price = arr[1]
         }
-
-        if (variation ~ /"MinimumOrderQuantity"[[:space:]]*:[[:space:]]*[0-9]+/) {
-          temp = variation
-          gsub(/.*"MinimumOrderQuantity"[[:space:]]*:[[:space:]]*/, "", temp)
-          gsub(/[^0-9].*/, "", temp)
-          moq = temp
+        
+        if (match(variation, /"MinimumOrderQuantity"[[:space:]]*:[[:space:]]*([0-9]+)/, arr)) {
+          moq = arr[1]
         } else {
           moq = "1"
         }
-
-        # Extract package type if present (BSD awk compatible)
+        
+        # Extract package type if present
         pkg = "Unknown"
-        if (variation ~ /"PackageType"[[:space:]]*:[[:space:]]*\{[^}]*"Name"[[:space:]]*:[[:space:]]*"/) {
-          temp = variation
-          gsub(/.*"PackageType"[[:space:]]*:[[:space:]]*\{[^}]*"Name"[[:space:]]*:[[:space:]]*"/, "", temp)
-          gsub(/".*/, "", temp)
-          pkg = temp
+        if (match(variation, /"PackageType"[[:space:]]*:[[:space:]]*\{[^}]*"Name"[[:space:]]*:[[:space:]]*"([^"]*)"/, arr)) {
+          pkg = arr[1]
         }
         
         # Output if we have required fields
@@ -401,7 +376,7 @@ select_digikey_candidate() {
 
 	# Convert to array with descriptions, price, MOQ, and package
 	local candidate_array=()
-	while IFS='|' read -r part_num _url description _detailed_desc price moq package; do
+	while IFS='|' read -r part_num _ description _ price moq package; do
 		# Format: "PART-NUM - Description ($Price/ea, MOQ: X, Package)"
 		candidate_array+=("$part_num - $description (\$$price/ea, MOQ: $moq, $package)")
 	done <<<"$candidates"
@@ -409,8 +384,9 @@ select_digikey_candidate() {
 	# Present options
 	echo ""
 	local selection
+	local result
 	selection=$(select_from_list "Select DigiKey part for [$symbol]:" "${candidate_array[@]}")
-	local result=$?
+	result=$?
 
 	if [[ $result -eq 0 ]] && [[ -n "$selection" ]]; then
 		# Extract just the part number (before " - ")
@@ -418,16 +394,16 @@ select_digikey_candidate() {
 
 		# Find the corresponding line
 		local selected_line
-		selected_line=$(echo "$candidates" | grep "^${part_num}|")
 		local selected_url
-		selected_url=$(echo "$selected_line" | cut -d'|' -f2)
 		local selected_desc
-		selected_desc=$(echo "$selected_line" | cut -d'|' -f3)
 		local selected_detailed_desc
-		selected_detailed_desc=$(echo "$selected_line" | cut -d'|' -f4)
 		local selected_price
-		selected_price=$(echo "$selected_line" | cut -d'|' -f5)
 		local selected_moq
+		selected_line=$(echo "$candidates" | grep "^${part_num}|")
+		selected_url=$(echo "$selected_line" | cut -d'|' -f2)
+		selected_desc=$(echo "$selected_line" | cut -d'|' -f3)
+		selected_detailed_desc=$(echo "$selected_line" | cut -d'|' -f4)
+		selected_price=$(echo "$selected_line" | cut -d'|' -f5)
 		selected_moq=$(echo "$selected_line" | cut -d'|' -f6)
 
 		if add_digikey_properties "$file" "$symbol" "$part_num" "$selected_url" "$selected_desc" "$selected_detailed_desc" "$selected_price" "$selected_moq"; then
@@ -452,10 +428,10 @@ add_digikey_properties() {
 
 	# Parse file to check for existing ki_keywords and ki_description
 	local symbols_data
-	symbols_data=$(parse_file "$file")
 	local existing_keywords
-	existing_keywords=$(get_property "$symbols_data" "$symbol" "ki_keywords")
 	local existing_description
+	symbols_data=$(parse_file "$file")
+	existing_keywords=$(get_property "$symbols_data" "$symbol" "ki_keywords")
 	existing_description=$(get_property "$symbols_data" "$symbol" "ki_description")
 
 	# Build properties array

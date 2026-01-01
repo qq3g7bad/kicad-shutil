@@ -1,42 +1,56 @@
 #!/usr/bin/env bash
 
+# @IMPL-UTILS-001@ (FROM: @ARCH-UTILS-001@)
 # utils.sh - Utility functions for kicad-shutil
 # Cross-platform (Linux, macOS, Windows Git Bash)
-# shellcheck disable=SC2155  # Declare and assign separately - acceptable for utility functions
 
 # Color output (if terminal supports it)
-# Allow tests to override by pre-defining these variables
-if [[ -z "${COLOR_RED+x}" ]]; then
-	if [[ -t 1 ]] && command -v tput >/dev/null 2>&1; then
-		COLOR_RED=$(tput setaf 1 2>/dev/null || echo "")
-		COLOR_GREEN=$(tput setaf 2 2>/dev/null || echo "")
-		COLOR_YELLOW=$(tput setaf 3 2>/dev/null || echo "")
-		COLOR_BLUE=$(tput setaf 4 2>/dev/null || echo "")
-		COLOR_RESET=$(tput sgr0 2>/dev/null || echo "")
-	else
-		COLOR_RED=""
-		COLOR_GREEN=""
-		COLOR_YELLOW=""
-		COLOR_BLUE=""
-		COLOR_RESET=""
-	fi
+if [[ -t 1 ]] && command -v tput >/dev/null 2>&1; then
+	COLOR_RED=$(tput setaf 1 2>/dev/null || echo "")
+	COLOR_GREEN=$(tput setaf 2 2>/dev/null || echo "")
+	COLOR_YELLOW=$(tput setaf 3 2>/dev/null || echo "")
+	COLOR_BLUE=$(tput setaf 4 2>/dev/null || echo "")
+	COLOR_MAGENTA=$(tput setaf 5 2>/dev/null || echo "")
+	COLOR_CYAN=$(tput setaf 6 2>/dev/null || echo "")
+	COLOR_GRAY=$(tput setaf 8 2>/dev/null || echo "")
+	COLOR_RESET=$(tput sgr0 2>/dev/null || echo "")
+else
+	COLOR_RED=""
+	COLOR_GREEN=""
+	COLOR_YELLOW=""
+	COLOR_BLUE=""
+	COLOR_MAGENTA=""
+	COLOR_CYAN=""
+	COLOR_GRAY=""
+	COLOR_RESET=""
 fi
+
+# Export colors for use in other scripts
+export COLOR_RED COLOR_GREEN COLOR_YELLOW COLOR_BLUE COLOR_MAGENTA COLOR_CYAN COLOR_GRAY COLOR_RESET
 
 # Logging functions
 info() {
-	echo "${COLOR_BLUE}[INFO]${COLOR_RESET} $*" >&2
+	[[ "${VERBOSE:-false}" == "true" ]] && echo "${COLOR_BLUE}[INFO]:${COLOR_RESET} $*" >&2
 }
 
 warn() {
-	echo "${COLOR_YELLOW}[WARN]${COLOR_RESET} $*" >&2
+	echo "${COLOR_YELLOW}[WARN]:${COLOR_RESET} $*" >&2
 }
 
 error() {
-	echo "${COLOR_RED}[ERROR]${COLOR_RESET} $*" >&2
+	echo "${COLOR_RED}[ERROR]:${COLOR_RESET} $*" >&2
 }
 
 success() {
-	echo "${COLOR_GREEN}[OK]${COLOR_RESET} $*" >&2
+	[[ "${VERBOSE:-false}" == "true" ]] && echo "${COLOR_GREEN}[OK]:${COLOR_RESET} $*" >&2
+}
+
+env_info() {
+	[[ "${VERBOSE:-false}" == "true" ]] && echo "${COLOR_BLUE}[ENV]:${COLOR_RESET} $*" >&2
+}
+
+gray_text() {
+	echo "${COLOR_GRAY}$*${COLOR_RESET}"
 }
 
 # Spinner animation for long-running operations
@@ -95,6 +109,7 @@ stop_spinner() {
 	fi
 }
 
+# @IMPL-UTILS-002@ (FROM: @ARCH-UTILS-001@)
 # Check if required commands are available
 check_dependencies() {
 	local missing=()
@@ -108,8 +123,9 @@ check_dependencies() {
 	if [[ ${#missing[@]} -gt 0 ]]; then
 		error "Missing required commands: ${missing[*]}"
 		error "Please install: ${missing[*]}"
-		exit 1
+		return 1
 	fi
+	return 0
 }
 
 # Get file modification time (cross-platform)
@@ -149,8 +165,10 @@ is_cache_valid() {
 		return 1 # Cache doesn't exist
 	fi
 
-	local cache_time=$(get_file_mtime "$cache_file")
-	local current_time=$(get_timestamp)
+	local cache_time
+	cache_time=$(get_file_mtime "$cache_file")
+	local current_time
+	current_time=$(get_timestamp)
 	local age=$((current_time - cache_time))
 
 	if [[ $age -lt $ttl ]]; then
@@ -192,7 +210,8 @@ http_get() {
 
 	local cache_file=""
 	if [[ -n "$cache_key" ]]; then
-		local hash=$(echo -n "$cache_key" | md5sum 2>/dev/null | cut -d' ' -f1 || echo "$cache_key")
+		local hash
+		hash=$(echo -n "$cache_key" | md5sum 2>/dev/null | cut -d' ' -f1 || echo "$cache_key")
 		cache_file="$CACHE_DIR/${hash}.cache"
 
 		# Check cache
@@ -221,22 +240,40 @@ http_get() {
 	fi
 }
 
-# HTTP HEAD request to check if URL is valid
+# HTTP request to check if URL is valid
 # Returns HTTP status code
 http_check_url() {
 	local url="$1"
 
 	local http_code
-	# Use HEAD request to check URL without downloading content
-	# Extract the final HTTP status code from the response headers
-	# Note: Using --http1.1 to avoid HTTP/2 issues with some servers
-	http_code=$(curl -s -I -L --http1.1 --connect-timeout 5 --max-time 15 \
-		-A "Mozilla/5.0 (compatible; kicad-shutil/1.0)" \
-		"$url" 2>/dev/null | grep -i "^HTTP/" | tail -1 | awk '{print $2}')
+	# Use GET request with browser-like headers
+	# Download only first 1KB to minimize bandwidth
+	# Some servers (like Analog Devices) require realistic browser headers
+	http_code=$(curl -s -L \
+		--connect-timeout 20 --max-time 60 \
+		-A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
+		-H "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8" \
+		-H "Accept-Language: en-US,en;q=0.5" \
+		-H "Accept-Encoding: gzip, deflate, br" \
+		-H "DNT: 1" \
+		-H "Connection: keep-alive" \
+		-H "Upgrade-Insecure-Requests: 1" \
+		-H "Sec-Fetch-Dest: document" \
+		-H "Sec-Fetch-Mode: navigate" \
+		-H "Sec-Fetch-Site: none" \
+		-r 0-1023 \
+		-o /dev/null -w "%{http_code}" \
+		"$url" 2>/dev/null)
 
 	# If curl failed or no status code found, return 000
 	if [[ -z "$http_code" ]]; then
 		http_code="000"
+	fi
+
+	# 206 (Partial Content) and 416 (Range Not Satisfiable) are also successes
+	# Some servers return 416 for small files, which means the file exists
+	if [[ "$http_code" == "206" ]] || [[ "$http_code" == "416" ]]; then
+		http_code="200"
 	fi
 
 	echo "$http_code"
@@ -250,7 +287,8 @@ download_file() {
 	local max_attempts="${3:-3}"
 
 	# Create output directory
-	local output_dir=$(dirname "$output")
+	local output_dir
+	output_dir=$(dirname "$output")
 	mkdir -p "$output_dir"
 
 	for attempt in $(seq 1 "$max_attempts"); do
@@ -292,6 +330,7 @@ download_file() {
 }
 
 # Interactive user selection from a list
+# @IMPL-UTILS-003@ (FROM: @ARCH-UTILS-001@)
 # Usage: select_from_list <prompt> <item1> <item2> ...
 # Returns: selected item or empty string if skipped
 select_from_list() {
@@ -330,7 +369,7 @@ select_from_list() {
 		case "$choice" in
 			q | Q)
 				error "User quit"
-				exit 0
+				return 1
 				;;
 			s | S)
 				return 2 # Skip signal
@@ -405,12 +444,13 @@ atomic_write() {
 # Extract filename without extension
 get_basename_no_ext() {
 	local file="$1"
-	local basename=$(basename "$file")
+	local basename
+	basename=$(basename "$file")
 	echo "${basename%.*}"
 }
 
 # Validate a datasheet URL
-# Returns: OK, BROKEN, TIMEOUT, REDIRECT, HTTP_XXX
+# Returns: OK, BROKEN, REDIRECT, TIMEOUT, HTTP_XXX
 validate_datasheet_url() {
 	local url="$1"
 
@@ -421,7 +461,8 @@ validate_datasheet_url() {
 	fi
 
 	# Check HTTP status
-	local http_code=$(http_check_url "$url")
+	local http_code
+	http_code=$(http_check_url "$url")
 
 	case "$http_code" in
 		200)
@@ -442,10 +483,14 @@ validate_datasheet_url() {
 	esac
 }
 
+# @IMPL-UTILS-004@ (FROM: @ARCH-UTILS-001@)
 # Initialize utilities (called from main script)
 init_utils() {
-	check_dependencies
+	if ! check_dependencies; then
+		return 1
+	fi
 
 	# Setup signal handlers to cleanup spinner on interrupt
 	trap cleanup_spinner INT TERM EXIT
+	return 0
 }

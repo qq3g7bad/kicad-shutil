@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 
-# kicad-shutil - KiCad Symbol Helper Utilities
-# Manage KiCad symbol library metadata: DigiKey integration, datasheet validation, bulk downloads
+# @IMPL-MAIN-001@ (FROM: @ARCH-MAIN-001@)
+# kicad-shutil - KiCad Project Helper Utilities
+# Manage KiCad projects: verify libraries, symbols, footprints, and datasheets
 
 set -uo pipefail
 
@@ -10,74 +11,279 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LIB_DIR="$SCRIPT_DIR/lib"
 CACHE_DIR="$SCRIPT_DIR/cache"
 
+# Verbose mode (set via --verbose flag)
+export VERBOSE=false
+
 # Source library modules
 source "$LIB_DIR/utils.sh"
-source "$LIB_DIR/parser.sh"
-source "$LIB_DIR/writer.sh"
-
-# Global options
-OPT_UPDATE_DIGIKEY=false
-OPT_DELETE_DIGIKEY=false
-OPT_VERIFY=false
-OPT_DOWNLOAD_DATASHEETS=false
-DATASHEET_DIR="./datasheets"
-FILES=()
 
 # Usage information
 usage() {
 	cat <<EOF
-Usage: kicad-shutil [OPTIONS] <file.kicad_sym> [<file2.kicad_sym> ...]
-       kicad-shutil [OPTIONS] <sym-lib-table> [<fp-lib-table>]
+Usage: kicad-shutil project <file.kicad_pro|directory>
+       kicad-shutil <file.kicad_pro>              # Implicit project command
+       kicad-shutil sym [options] <file.kicad_sym>...
 
-KiCad Helper Utilities
+KiCad Project Helper Utilities
 
-Supported file types:
-  • .kicad_sym files (symbol libraries) - all operations
-  • sym-lib-table, fp-lib-table - verification only
+COMMANDS:
+    project          Verify KiCad project and all libraries
+                     Run 'kicad-shutil project --help' for details
 
-If no operation is specified, defaults to --verify.
+    sym              Manage symbol library files (.kicad_sym)
+                     Run 'kicad-shutil sym --help' for details
 
-OPTIONS:
-    -u, --update-digikey-info   Add/update DigiKey part numbers, URLs, and metadata
-    -d, --delete-digikey-info   Remove all DigiKey metadata from symbols
-    -v, --verify                Validate footprints, datasheets, and show detailed report
-    -D, --download-datasheets   Download all datasheets (use --to <dir> to specify directory)
-    -h, --help                  Show this help message
+GLOBAL OPTIONS:
+    --verbose        Show detailed verbose output
+    -h, --help       Show this help message
+    -v, --version    Show version information
 
 EXAMPLES:
-    # Verify (default operation when no option specified)
-    $0 pmic.kicad_sym
-    $0 -v pmic.kicad_sym
+    # Verify entire project (explicit)
+    kicad-shutil project my_project.kicad_pro
+    kicad-shutil project ./my_project
 
-    # Add/update DigiKey info (interactive mode)
-    $0 --update-digikey-info pmic.kicad_sym
-    $0 -u pmic.kicad_sym
+    # Verify project (implicit - auto-detect .kicad_pro)
+    kicad-shutil my_project.kicad_pro
 
-    # Remove all DigiKey metadata
-    $0 --delete-digikey-info pmic.kicad_sym
-    $0 -d pmic.kicad_sym
+    # Verify project with verbose output
+    kicad-shutil --verbose project my_project.kicad_pro
 
-    # Download datasheets to specific directory
-    $0 -D *.kicad_sym --to ~/datasheets
-    $0 --download-datasheets *.kicad_sym -t ~/datasheets
+    # Manage symbol libraries
+    kicad-shutil sym pmic.kicad_sym
+    kicad-shutil sym --update-digikey pmic.kicad_sym
+    kicad-shutil sym --download-datasheets pmic.kicad_sym --to ~/datasheets
 
 EOF
 	exit 0
 }
 
-# Parse command line arguments
-parse_args() {
+# Project command: verify a KiCad project
+# Usage: usage_project [exit_code]
+usage_project() {
+	local exit_code="${1:-0}"
+	cat <<EOF
+Usage: kicad-shutil project [options] <directory|file.kicad_pro>
+       kicad-shutil <file.kicad_pro>                # Implicit
+
+Verify a KiCad project and all associated libraries.
+
+This command performs comprehensive verification:
+  • Validates project structure and library tables
+  • Checks all symbol libraries for missing footprints and datasheets
+  • Checks all footprint libraries for missing 3D models
+  • Resolves all environment variables (KIPRJMOD, etc.)
+
+OPTIONS:
+    --verbose      Show detailed verbose output (INFO, OK, and summary)
+    -h, --help     Show this help message
+
+EXAMPLES:
+    # Verify a project (by file)
+    kicad-shutil project my_project.kicad_pro
+    kicad-shutil my_project.kicad_pro              # Implicit
+
+    # Verify a project (by directory)
+    kicad-shutil project ./my_project
+
+    # Verify with verbose output
+    kicad-shutil --verbose project my_project.kicad_pro
+
+EOF
+	exit "$exit_code"
+}
+
+# Symbol command: manage symbol library files
+# Usage: usage_sym [exit_code]
+usage_sym() {
+	local exit_code="${1:-0}"
+	cat <<EOF
+Usage: kicad-shutil sym [options] <file.kicad_sym> [<file2.kicad_sym> ...]
+
+Manage KiCad symbol library files.
+
+If no operation is specified, defaults to --verify.
+
+OPTIONS:
+    -v, --verify                Validate footprints, datasheets, and show detailed report
+    -u, --update-digikey        Add/update DigiKey part numbers, URLs, and metadata
+    -d, --delete-digikey        Remove all DigiKey metadata from symbols
+    -D, --download-datasheets   Download all datasheets (use --to <dir> to specify directory)
+    -t, --to <dir>              Target directory for datasheet downloads
+    -h, --help                  Show this help message
+
+EXAMPLES:
+    # Verify symbol library (default operation)
+    kicad-shutil sym pmic.kicad_sym
+    kicad-shutil sym --verify pmic.kicad_sym
+
+    # Add/update DigiKey info (interactive mode)
+    kicad-shutil sym --update-digikey pmic.kicad_sym
+
+    # Remove all DigiKey metadata
+    kicad-shutil sym --delete-digikey pmic.kicad_sym
+
+    # Download datasheets to specific directory
+    kicad-shutil sym --download-datasheets *.kicad_sym --to ~/datasheets
+
+EOF
+	exit "$exit_code"
+}
+
+# @IMPL-MAIN-002@ (FROM: @ARCH-MAIN-001@)
+# Parse command line and route to appropriate subcommand
+main() {
 	if [[ $# -eq 0 ]]; then
 		usage
 	fi
 
+	local command="$1"
+
+	# Handle special cases
+	case "$command" in
+		-h | --help | help)
+			usage
+			;;
+		-v | --version)
+			echo "kicad-shutil"
+			exit 0
+			;;
+		--verbose)
+			# Global verbose flag
+			export VERBOSE=true
+			shift
+			main "$@"
+			return $?
+			;;
+		project)
+			# Explicit project subcommand
+			shift
+			cmd_project "$@"
+			return $?
+			;;
+		sym)
+			# Symbol library management
+			shift
+			cmd_sym "$@"
+			return $?
+			;;
+		*.kicad_pro)
+			# Implicit project command (auto-detect .kicad_pro files)
+			cmd_project "$@"
+			return $?
+			;;
+		*)
+			error "Unknown command or option: $command"
+			echo "" >&2
+			echo "Use 'kicad-shutil --help' for usage information." >&2
+			exit 2
+			;;
+	esac
+}
+
+# @IMPL-MAIN-003@ (FROM: @ARCH-MAIN-001@)
+# Project command implementation
+cmd_project() {
+	local project_input=""
+	local project_file=""
+
+	# Parse arguments
 	while [[ $# -gt 0 ]]; do
 		case "$1" in
-			-u | --update-digikey-info)
+			-h | --help)
+				usage_project
+				;;
+			--verbose)
+				export VERBOSE=true
+				shift
+				;;
+			-*)
+				error "Unknown option for 'project' command: $1"
+				echo "" >&2
+				usage_project 2
+				;;
+			*)
+				if [[ -z "$project_input" ]]; then
+					project_input="$1"
+				else
+					error "Only one project path can be specified"
+					exit 2
+				fi
+				shift
+				;;
+		esac
+	done
+
+	# Validate input
+	if [[ -z "$project_input" ]]; then
+		error "No project path specified"
+		usage_project 2
+	fi
+
+	# Determine project file
+	if [[ -d "$project_input" ]]; then
+		# Input is a directory - find .kicad_pro file
+		local pro_files=("$project_input"/*.kicad_pro)
+		if [[ ${#pro_files[@]} -eq 0 || ! -f "${pro_files[0]}" ]]; then
+			error "No .kicad_pro file found in directory: $project_input"
+			exit 1
+		fi
+		if [[ ${#pro_files[@]} -gt 1 ]]; then
+			error "Multiple .kicad_pro files found in directory: $project_input"
+			echo "Please specify the project file directly" >&2
+			exit 1
+		fi
+		project_file="${pro_files[0]}"
+	elif [[ -f "$project_input" ]]; then
+		# Input is a file
+		if [[ ! "$project_input" =~ \.kicad_pro$ ]]; then
+			error "File must be a .kicad_pro file: $project_input"
+			exit 1
+		fi
+		project_file="$project_input"
+	else
+		error "Path not found: $project_input"
+		exit 1
+	fi
+
+	# Initialize
+	if ! init_utils; then
+		exit 1
+	fi
+	mkdir -p "$CACHE_DIR"
+
+	# Source verification modules
+	source "$LIB_DIR/verify.sh"
+
+	# Verify project
+	verify_file "$project_file" ""
+}
+
+# @IMPL-MAIN-004@ (FROM: @ARCH-MAIN-001@)
+# Symbol command implementation
+cmd_sym() {
+	# Source required modules
+	source "$LIB_DIR/parser.sh"
+	source "$LIB_DIR/writer.sh"
+
+	local OPT_UPDATE_DIGIKEY=false
+	local OPT_DELETE_DIGIKEY=false
+	local OPT_VERIFY=false
+	local OPT_DOWNLOAD_DATASHEETS=false
+	local DATASHEET_DIR="./datasheets"
+	local FILES=()
+
+	# Parse arguments
+	while [[ $# -gt 0 ]]; do
+		case "$1" in
+			-h | --help)
+				usage_sym
+				;;
+			-u | --update-digikey)
 				OPT_UPDATE_DIGIKEY=true
 				shift
 				;;
-			-d | --delete-digikey-info)
+			-d | --delete-digikey)
 				OPT_DELETE_DIGIKEY=true
 				shift
 				;;
@@ -93,12 +299,9 @@ parse_args() {
 				DATASHEET_DIR="$2"
 				shift 2
 				;;
-			-h | --help)
-				usage
-				;;
 			-*)
 				error "Unknown option: $1"
-				usage
+				usage_sym 2
 				;;
 			*)
 				FILES+=("$1")
@@ -107,10 +310,10 @@ parse_args() {
 		esac
 	done
 
-	# Validate: at least one file and one operation
+	# Validate: at least one file
 	if [[ ${#FILES[@]} -eq 0 ]]; then
 		error "No input files specified"
-		exit 1
+		usage_sym 2
 	fi
 
 	# If no operation specified, default to --verify
@@ -121,7 +324,7 @@ parse_args() {
 
 	# Validate: can't use both update and delete at the same time
 	if $OPT_UPDATE_DIGIKEY && $OPT_DELETE_DIGIKEY; then
-		error "Cannot use --update-digikey-info and --delete-digikey-info together"
+		error "Cannot use --update-digikey and --delete-digikey together"
 		exit 1
 	fi
 
@@ -131,13 +334,10 @@ parse_args() {
 		if [[ -f "$pattern" ]]; then
 			expanded_files+=("$pattern")
 		else
-			# Try glob expansion with nullglob to avoid literal pattern if no match
-			shopt -s nullglob
-			local -a matches
+			# Try glob expansion
 			# shellcheck disable=SC2206
-			matches=($pattern) # Intentionally unquoted for glob expansion
-			shopt -u nullglob
-			if [[ ${#matches[@]} -gt 0 ]]; then
+			local matches=($pattern)
+			if [[ -e "${matches[0]}" ]]; then
 				expanded_files+=("${matches[@]}")
 			else
 				warn "File not found: $pattern"
@@ -148,22 +348,22 @@ parse_args() {
 	FILES=("${expanded_files[@]}")
 
 	if [[ ${#FILES[@]} -eq 0 ]]; then
-		error "No valid .kicad_sym files found"
+		error "No valid input files found"
 		exit 1
 	fi
-}
 
-# Main processing loop
-main() {
-	parse_args "$@"
+	# Validate file extensions (only .kicad_sym allowed)
+	for file in "${FILES[@]}"; do
+		if [[ ! "$file" =~ \.kicad_sym$ ]]; then
+			error "Unsupported file type: $file (only .kicad_sym files are supported)"
+			exit 1
+		fi
+	done
 
-	# Initialize utilities
-	init_utils
-
-	info "kicad-shutil - Processing ${#FILES[@]} file(s)"
-	echo
-
-	# Initialize cache directory
+	# Initialize
+	if ! init_utils; then
+		exit 1
+	fi
 	mkdir -p "$CACHE_DIR"
 
 	# Initialize verify if needed
@@ -184,6 +384,8 @@ main() {
 		source "$LIB_DIR/digikey.sh"
 	fi
 
+	info "kicad-shutil - Processing ${#FILES[@]} file(s)"
+
 	# Process each file
 	for file in "${FILES[@]}"; do
 		if [[ ! -f "$file" ]]; then
@@ -191,54 +393,25 @@ main() {
 			continue
 		fi
 
-		local filename
-		filename=$(basename "$file")
-
-		# Check file type
-		if [[ "$filename" == "sym-lib-table" || "$filename" == "fp-lib-table" ]]; then
-			# Library table files - only verification is supported
-			if $OPT_VERIFY; then
-				process_table_file "$file"
-			else
-				warn "Skipping $filename: Only --verify is supported for library tables"
-			fi
-		elif [[ "$file" =~ \.kicad_sym$ ]]; then
-			# Symbol library file - all operations supported
-			process_file "$file"
-		else
-			warn "Skipping unsupported file: $file"
-			continue
-		fi
+		process_symbol_file "$file"
 	done
 
-	# Print verification report at the end
-	if $OPT_VERIFY; then
+	# Print verification report at the end (only in verbose mode)
+	if $OPT_VERIFY && [[ "${VERBOSE:-false}" == "true" ]]; then
 		print_verify_report
 	fi
 
-	# Print datasheet download summary
-	if $OPT_DOWNLOAD_DATASHEETS; then
+	# Print datasheet download summary (only in verbose mode)
+	if $OPT_DOWNLOAD_DATASHEETS && [[ "${VERBOSE:-false}" == "true" ]]; then
 		print_datasheet_summary
 	fi
 
-	echo
 	info "Processing complete"
 }
 
-# Process a library table file (sym-lib-table or fp-lib-table)
-process_table_file() {
-	local file="$1"
-	local filename
-	filename=$(basename "$file")
-
-	info "Processing: $filename"
-
-	# Library tables don't need symbols_data, pass empty string
-	verify_file "$file" ""
-}
-
+# @IMPL-MAIN-005@ (FROM: @ARCH-MAIN-001@)
 # Process a single .kicad_sym file
-process_file() {
+process_symbol_file() {
 	local file="$1"
 	local filename
 	filename=$(basename "$file")

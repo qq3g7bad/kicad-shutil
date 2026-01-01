@@ -71,9 +71,8 @@ for test_file in "${test_files[@]}"; do
 		((total_passed++))
 	else
 		echo -e "${RED}✗ $test_name failed${NC}"
-		while IFS= read -r line; do
-			echo "  $line"
-		done <<<"$output"
+		# shellcheck disable=SC2001  # sed is clearer than bash parameter expansion for line-by-line indentation
+		echo "$output" | sed 's/^/  /'
 		((total_failed++))
 		failed_tests+=("$test_name")
 	fi

@@ -20,3 +20,7 @@ test/fixtures/test_validate_*.kicad_sym
 # Temporary files
 *.tmp
 *.tmp.*
+
+# Claude Code documentation (AI-specific)
+CLAUDE.md
+docs/traceability/traceability.html

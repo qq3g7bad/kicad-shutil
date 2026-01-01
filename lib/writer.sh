@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 
+# @IMPL-WRITER-001@ (FROM: @ARCH-WRITER-001@)
 # writer.sh - Property insertion and modification for KiCad symbol files
 # Handles atomic writes with backup
 
@@ -268,7 +269,7 @@ delete_property() {
 
 	local temp_file="${file}.tmp.$$"
 
-	if awk -v symbol="$symbol_name" -v prop="$prop_name" '
+	awk -v symbol="$symbol_name" -v prop="$prop_name" '
     BEGIN {
         in_symbol = 0
         in_property = 0
@@ -276,14 +277,14 @@ delete_property() {
         depth = 0
         prop_depth = 0
     }
-
+    
     # Track when we enter the target symbol
     /^\s*\(symbol/ {
         if ($0 ~ "\\(symbol \"" symbol "\"") {
             in_symbol = 1
         }
     }
-
+    
     # If in target symbol, check for the property
     in_symbol && /^\s*\(property/ {
         if ($0 ~ "\\(property \"" prop "\"") {
@@ -293,7 +294,7 @@ delete_property() {
             next  # Skip this line
         }
     }
-
+    
     # If we are skipping a property, track parentheses to know when it ends
     skip_property {
         prop_depth += gsub(/\(/, "(", $0) - gsub(/\)/, ")", $0)
@@ -303,7 +304,7 @@ delete_property() {
         }
         next  # Skip lines within the property
     }
-
+    
     # Exit symbol when we find the closing parenthesis at depth 0
     in_symbol && /^\s*\)/ {
         # Simple heuristic: if line is just ")" or "  )", it might close the symbol
@@ -311,12 +312,12 @@ delete_property() {
             in_symbol = 0
         }
     }
-
+    
     # Print all other lines
     { print }
-    ' "$file" >"$temp_file"; then
-		mv "$temp_file" "$file"
+    ' "$file" >"$temp_file"
 
+	if mv "$temp_file" "$file"; then
 		# Verify the file is still valid after modification
 		if ! verify_file_integrity "$file"; then
 			error "File integrity check failed after property deletion"

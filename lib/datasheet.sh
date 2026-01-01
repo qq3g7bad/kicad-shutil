@@ -1,22 +1,19 @@
 #!/usr/bin/env bash
 
+# @IMPL-DATASHEET-001@ (FROM: @ARCH-DATASHEET-001@)
 # datasheet.sh - Datasheet download module for kicad-shutil
 # Bulk download datasheets from symbol Datasheet properties
 
-# Global statistics (bash 3.2 compatible - no associative arrays)
-DATASHEET_STATS_TOTAL=0
-DATASHEET_STATS_SUCCESS=0
-DATASHEET_STATS_FAILED=0
-DATASHEET_STATS_MISSING=0
-DATASHEET_STATS_SKIPPED=0
+# Global statistics
+declare -A DATASHEET_STATS
 
 # Initialize datasheet statistics
 init_datasheet_stats() {
-	DATASHEET_STATS_TOTAL=0
-	DATASHEET_STATS_SUCCESS=0
-	DATASHEET_STATS_FAILED=0
-	DATASHEET_STATS_MISSING=0
-	DATASHEET_STATS_SKIPPED=0
+	DATASHEET_STATS[total]=0
+	DATASHEET_STATS[success]=0
+	DATASHEET_STATS[failed]=0
+	DATASHEET_STATS[missing]=0
+	DATASHEET_STATS[skipped]=0
 }
 
 # Download datasheets for all symbols in a file
@@ -27,7 +24,7 @@ download_datasheets() {
 	local category="$3"
 
 	# Initialize stats if not done
-	if [[ -z "${DATASHEET_STATS_TOTAL:-}" ]]; then
+	if [[ -z "${DATASHEET_STATS[total]:-}" ]]; then
 		init_datasheet_stats
 	fi
 
@@ -66,7 +63,7 @@ download_symbol_datasheet() {
 	local symbol="$3"
 	local output_dir="$4"
 
-	((DATASHEET_STATS_TOTAL++)) || true
+	((DATASHEET_STATS[total]++)) || true
 
 	# Get datasheet URL
 	local datasheet
@@ -74,14 +71,14 @@ download_symbol_datasheet() {
 
 	if [[ -z "$datasheet" ]]; then
 		warn "    [$symbol] No datasheet URL"
-		((DATASHEET_STATS_MISSING++)) || true
+		((DATASHEET_STATS[missing]++)) || true
 		return 1
 	fi
 
 	# Skip non-HTTP URLs
 	if [[ ! "$datasheet" =~ ^https?:// ]]; then
 		info "    [$symbol] Skipping non-HTTP URL: $datasheet"
-		((DATASHEET_STATS_SKIPPED++)) || true
+		((DATASHEET_STATS[skipped]++)) || true
 		return 0
 	fi
 
@@ -96,7 +93,7 @@ download_symbol_datasheet() {
 	# Check if already downloaded
 	if [[ -f "$output_file" ]]; then
 		info "    [$symbol] Already exists, skipping"
-		((DATASHEET_STATS_SKIPPED++)) || true
+		((DATASHEET_STATS[skipped]++)) || true
 		return 0
 	fi
 
@@ -105,12 +102,12 @@ download_symbol_datasheet() {
 	if download_file "$datasheet" "$output_file" 3; then
 		stop_spinner
 		success "    [$symbol] Downloaded successfully"
-		((DATASHEET_STATS_SUCCESS++)) || true
+		((DATASHEET_STATS[success]++)) || true
 		return 0
 	else
 		stop_spinner
 		error "    [$symbol] Download failed: $datasheet"
-		((DATASHEET_STATS_FAILED++)) || true
+		((DATASHEET_STATS[failed]++)) || true
 		return 1
 	fi
 }
@@ -133,11 +130,11 @@ get_file_extension_from_url() {
 
 # Print datasheet download summary
 print_datasheet_summary() {
-	local total=${DATASHEET_STATS_TOTAL:-0}
-	local success=${DATASHEET_STATS_SUCCESS:-0}
-	local failed=${DATASHEET_STATS_FAILED:-0}
-	local missing=${DATASHEET_STATS_MISSING:-0}
-	local skipped=${DATASHEET_STATS_SKIPPED:-0}
+	local total=${DATASHEET_STATS[total]:-0}
+	local success=${DATASHEET_STATS[success]:-0}
+	local failed=${DATASHEET_STATS[failed]:-0}
+	local missing=${DATASHEET_STATS[missing]:-0}
+	local skipped=${DATASHEET_STATS[skipped]:-0}
 
 	if [[ $total -eq 0 ]]; then
 		return

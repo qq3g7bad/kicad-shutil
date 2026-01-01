@@ -11,9 +11,11 @@ on:
   push:
     branches:
       - main        # On push to main branch
+      - develop     # On push to develop branch
   pull_request:
     branches:
       - main        # On PR to main branch
+      - develop     # On PR to develop branch
 
 # Job definitions
 jobs:
@@ -104,3 +106,61 @@ jobs:
             $(find ./lib -name "*.sh") \
             $(find ./test -name "*.sh" -not -path "./test/shunit2/*")
           echo "Formatting check passed!"
+
+  # Job 3: Shell portability check
+  shell-portability:
+    name: Shell portability analysis
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      # Install dash (Debian Almquist Shell - POSIX compliant)
+      - name: Install dash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y dash
+
+      # Check scripts for POSIX compliance
+      - name: Check for bashisms with checkbashisms
+        run: |
+          sudo apt-get install -y devscripts
+          echo "Checking for bashisms in scripts..."
+          
+          # Check main script
+          checkbashisms ./kicad-shutil || true
+          
+          # Check library scripts
+          for script in ./lib/*.sh; do
+            echo "Checking $script..."
+            checkbashisms "$script" || true
+          done
+          
+          echo "Note: This is an informational check only."
+
+      # Analyze POSIX incompatibilities
+      - name: Report portability status
+        run: |
+          echo "=========================================="
+          echo "Shell Portability Report"
+          echo "=========================================="
+          echo ""
+          echo "This project requires:"
+          echo "  - bash 4.0+ (for associative arrays)"
+          echo "  - curl (for DigiKey API calls)"
+          echo "  - awk, sed, grep (standard Unix tools)"
+          echo ""
+          echo "Known Bash-specific features in use:"
+          echo "  - [[ ]] conditional expressions"
+          echo "  - 'local' keyword"
+          echo "  - 'source' command"
+          echo "  - BASH_SOURCE variable"
+          echo "  - Associative arrays (declare -A)"
+          echo ""
+          echo "Full POSIX compliance is NOT a goal due to:"
+          echo "  - Required dependency on curl (not POSIX)"
+          echo "  - Use of Bash 4.0+ features for maintainability"
+          echo "=========================================="

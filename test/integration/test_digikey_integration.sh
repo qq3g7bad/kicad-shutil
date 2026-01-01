@@ -7,16 +7,17 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 LIB_DIR="$SCRIPT_DIR/lib"
 TEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# Disable color output (must be set before sourcing)
+# Source dependencies
+source "$LIB_DIR/utils.sh"
+source "$LIB_DIR/digikey.sh" 2>/dev/null || true
+
+# Disable color output (exported for sourced scripts)
+# shellcheck disable=SC2034  # Variables used by sourced modules
 export COLOR_RED=""
 export COLOR_GREEN=""
 export COLOR_YELLOW=""
 export COLOR_BLUE=""
 export COLOR_RESET=""
-
-# Source dependencies
-source "$LIB_DIR/utils.sh"
-source "$LIB_DIR/digikey.sh" 2>/dev/null || true
 
 #-----------------------------------
 # Test Setup
