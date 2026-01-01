@@ -1,5 +1,48 @@
 # Architecture and Design
 
+<details>
+<summary>Table of Contents</summary>
+
+- [1. System Architecture](#1-system-architecture)
+  - [Command Router (kicad-shutil)](#command-router-kicad-shutil)
+- [2. Library Modules](#2-library-modules)
+  - [S-Expression Parser (lib/parser.sh)](#s-expression-parser-libparsersh)
+  - [Project Parser (lib/parser_project.sh)](#project-parser-libparser_projectsh)
+  - [Footprint Parser (lib/parser_footprint.sh)](#footprint-parser-libparser_footprintsh)
+  - [Verification Dispatcher (lib/verify.sh)](#verification-dispatcher-libverifysh)
+  - [Library Table Verification (lib/verify_table.sh)](#library-table-verification-libverify_tablesh)
+  - [Project Verification (lib/verify_project.sh)](#project-verification-libverify_projectsh)
+  - [Property Writer (lib/writer.sh)](#property-writer-libwritersh)
+  - [DigiKey API Integration (lib/digikey.sh)](#digikey-api-integration-libdigikeysh)
+  - [Datasheet Download (lib/datasheet.sh)](#datasheet-download-libdatasheetsh)
+  - [Utilities (lib/utils.sh)](#utilities-libutilssh)
+- [3. Data Flow](#3-data-flow)
+  - [Symbol Library Workflow](#symbol-library-workflow)
+  - [Project Verification Workflow](#project-verification-workflow)
+- [4. Design Patterns](#4-design-patterns)
+- [5. Testing Strategy](#5-testing-strategy)
+- [6. Configuration Management](#6-configuration-management)
+- [7. Cross-Platform Considerations](#7-cross-platform-considerations)
+- [8. Performance Optimizations](#8-performance-optimizations)
+- [9. Future Enhancements](#9-future-enhancements)
+
+</details>
+
+## Quick Reference
+
+| Module | Purpose | Key Functions | Test File |
+|--------|---------|---------------|-----------|
+| parser.sh | Parse symbol files | `parse_file()`, `get_property()` | test_parser.sh |
+| parser_project.sh | Parse project files | `parse_project_file()`, `get_project_dir()` | test_parser_project.sh |
+| parser_footprint.sh | Parse footprint files | `parse_footprint_file()`, `list_models()` | test_parser_footprint.sh |
+| verify.sh | Verification dispatcher | `verify_file()`, `print_verify_report()` | test_verify.sh |
+| verify_table.sh | Library table verification | `verify_table_file()`, `resolve_kicad_path()` | test_verify_table.sh |
+| verify_project.sh | Deep project verification | `verify_project_file()`, `verify_symbol_libraries()` | test_verify_project.sh |
+| writer.sh | Property modification | `insert_property()`, `update_property()` | test_writer.sh |
+| digikey.sh | DigiKey API integration | `process_digikey()`, `search_digikey_part()` | test_digikey.sh |
+| datasheet.sh | Datasheet downloads | `download_datasheets()` | test_datasheet.sh |
+| utils.sh | Shared utilities | `info()`, `error()`, `http_get()` | test_utils.sh |
+
 ## 1. System Architecture
 
 <!-- @ARCH-MAIN-001@ (FROM: @REQ-CLI-001@, @REQ-CLI-002@, @REQ-CLI-003@) -->
@@ -25,6 +68,70 @@ The main executable routes commands to appropriate subcommand handlers.
 - UNIX Philosophy: Silent on success, errors to stderr
 - Exit codes: 0 = success, 1 = failure, 2 = usage error
 - Batch processing: Sequential file processing with aggregated results
+
+> [!TIP]
+> Enable verbose mode with --verbose flag to see detailed output and INFO messages.
+
+**Module Architecture:**
+
+```mermaid
+graph TB
+    subgraph "Main Executable"
+        MAIN[kicad-shutil]
+    end
+
+    subgraph "Parsers"
+        PARSER[parser.sh<br/>S-expression parser]
+        PARSER_PRJ[parser_project.sh<br/>JSON parser]
+        PARSER_FP[parser_footprint.sh<br/>Footprint parser]
+    end
+
+    subgraph "Verification"
+        VERIFY[verify.sh<br/>Dispatcher]
+        VERIFY_TBL[verify_table.sh<br/>Library tables]
+        VERIFY_PRJ[verify_project.sh<br/>Deep verification]
+    end
+
+    subgraph "Operations"
+        WRITER[writer.sh<br/>Property writer]
+        DIGIKEY[digikey.sh<br/>API integration]
+        DATASHEET[datasheet.sh<br/>Downloads]
+    end
+
+    subgraph "Utilities"
+        UTILS[utils.sh<br/>Logging, HTTP, Cache]
+    end
+
+    MAIN --> PARSER
+    MAIN --> PARSER_PRJ
+    MAIN --> VERIFY
+    VERIFY --> VERIFY_TBL
+    VERIFY --> VERIFY_PRJ
+    VERIFY_PRJ --> PARSER
+    VERIFY_PRJ --> PARSER_FP
+    VERIFY_PRJ --> VERIFY_TBL
+    MAIN --> WRITER
+    MAIN --> DIGIKEY
+    MAIN --> DATASHEET
+    PARSER --> UTILS
+    PARSER_PRJ --> UTILS
+    VERIFY --> UTILS
+    WRITER --> UTILS
+    DIGIKEY --> UTILS
+    DATASHEET --> UTILS
+
+    style MAIN fill:#ffcdd2
+    style PARSER fill:#e1f5ff
+    style PARSER_PRJ fill:#e1f5ff
+    style PARSER_FP fill:#e1f5ff
+    style VERIFY fill:#fff4e6
+    style VERIFY_TBL fill:#fff4e6
+    style VERIFY_PRJ fill:#fff4e6
+    style WRITER fill:#f3e5f5
+    style DIGIKEY fill:#f3e5f5
+    style DATASHEET fill:#f3e5f5
+    style UTILS fill:#e8f5e9
+```
 
 ## 2. Library Modules
 
@@ -170,6 +277,33 @@ Atomic file modification with automatic backups.
 - Verify integrity before committing changes
 - Automatic rollback on failure
 
+> [!NOTE]
+> All file writes use atomic operations with automatic backups (.bak files).
+
+**Atomic Write Pattern:**
+
+```mermaid
+flowchart TD
+    A[Start: modify file] --> B[Create .bak backup]
+    B --> C[Write to temp file]
+    C --> D{verify_file_integrity}
+    D -->|Valid| E[Move temp → original]
+    D -->|Invalid| F[Restore from .bak]
+    E --> G[Remove .bak]
+    F --> H[Report error]
+    G --> I[Success]
+    H --> J[Failure]
+
+    style B fill:#e8f5e9
+    style C fill:#e1f5ff
+    style D fill:#fff4e6
+    style E fill:#e8f5e9
+    style F fill:#ffcdd2
+    style G fill:#e8f5e9
+    style I fill:#c8e6c9
+    style J fill:#ef9a9a
+```
+
 <!-- @ARCH-DIGIKEY-001@ (FROM: @REQ-SYM-002@, @REQ-SYM-003@) -->
 ### DigiKey API Integration (lib/digikey.sh)
 OAuth2-based DigiKey API client with caching.
@@ -201,6 +335,54 @@ OAuth2-based DigiKey API client with caching.
 **Configuration:**
 - Load from `~/.kicad-shutil/config` or environment variables
 - Required: DIGIKEY_CLIENT_ID, DIGIKEY_CLIENT_SECRET
+
+> [!IMPORTANT]
+> DigiKey API credentials are required for --update-digikey operation.
+
+**DigiKey Integration Workflow:**
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant kicad-shutil
+    participant digikey.sh
+    participant DigiKey API
+    participant Cache
+
+    User->>kicad-shutil: sym --update-digikey file.kicad_sym
+    kicad-shutil->>digikey.sh: process_digikey()
+
+    alt Token not in cache
+        digikey.sh->>DigiKey API: OAuth2 client credentials
+        DigiKey API-->>digikey.sh: Access token (1hr)
+        digikey.sh->>Cache: Store token in memory
+    end
+
+    digikey.sh->>parser.sh: parse_file()
+    parser.sh-->>digikey.sh: Symbol list
+
+    loop For each symbol
+        digikey.sh->>Cache: Check API response cache
+        alt Cache miss or expired (7 days)
+            digikey.sh->>DigiKey API: Search part number
+            DigiKey API-->>digikey.sh: Search results
+            digikey.sh->>Cache: Store results (7 days)
+        end
+
+        alt Multiple candidates
+            digikey.sh->>User: Interactive selection menu
+            User-->>digikey.sh: Selected candidate
+        end
+
+        digikey.sh->>writer.sh: insert_property()
+        writer.sh->>writer.sh: Create .bak backup
+        writer.sh->>writer.sh: Atomic write to temp file
+        writer.sh->>writer.sh: verify_file_integrity()
+        writer.sh-->>digikey.sh: Success
+    end
+
+    digikey.sh-->>User: Statistics summary
+```
 
 <!-- @ARCH-DATASHEET-001@ (FROM: @REQ-SYM-004@) -->
 ### Datasheet Download (lib/datasheet.sh)
@@ -251,105 +433,40 @@ Shared utility functions for logging, HTTP, and file operations.
 <!-- @ARCH-FLOW-001@ (FROM: @REQ-SYM-001@) -->
 ### Symbol Library Workflow
 
-```
-┌──────────────────┐
-│ User invokes     │
-│ kicad-shutil sym │
-└────────┬─────────┘
-         │
-         v
-┌────────────────────┐
-│ Parse arguments    │
-│ Validate files     │
-└────────┬───────────┘
-         │
-         v
-┌─────────────────────┐
-│ parse_file()        │
-│ (parser.sh)         │
-│                     │
-│ Returns:            │
-│ SYMBOL|name|...     │
-│ PROP|key|value|...  │
-└────────┬────────────┘
-         │
-         v
-┌────────────────────────┐
-│ Operation modules:     │
-│ - verify.sh            │
-│ - digikey.sh           │
-│ - datasheet.sh         │
-│ - writer.sh            │
-└────────┬───────────────┘
-         │
-         v
-┌─────────────────────┐
-│ Print reports       │
-│ Exit with status    │
-└─────────────────────┘
+```mermaid
+flowchart TD
+    A[User invokes<br/>kicad-shutil sym] --> B[Parse arguments<br/>Validate files]
+    B --> C[parse_file<br/>parser.sh]
+    C --> D[Returns pipe-delimited data:<br/>SYMBOL, PROP records]
+    D --> E[Operation modules:<br/>- verify.sh<br/>- digikey.sh<br/>- datasheet.sh<br/>- writer.sh]
+    E --> F[Print reports<br/>Exit with status]
+
+    style C fill:#e1f5ff
+    style E fill:#fff4e6
+    style F fill:#e8f5e9
 ```
 
 <!-- @ARCH-FLOW-002@ (FROM: @REQ-PROJ-001@) -->
 ### Project Verification Workflow
 
-```
-┌──────────────────────┐
-│ User invokes         │
-│ kicad-shutil project │
-└────────┬─────────────┘
-         │
-         v
-┌────────────────────────┐
-│ parse_project_file()   │
-│ (parser_project.sh)    │
-│                        │
-│ Returns:               │
-│ PROJECT_DIR|/path      │
-│ ENV_VAR|name|value     │
-└────────┬───────────────┘
-         │
-         v
-┌────────────────────────┐
-│ Export KIPRJMOD + envs │
-│ Locate library tables  │
-└────────┬───────────────┘
-         │
-         v
-┌─────────────────────────────┐
-│ verify_table_file()         │
-│ (verify_table.sh)           │
-│                             │
-│ - Resolve environment vars  │
-│ - Validate library paths    │
-└────────┬────────────────────┘
-         │
-         v
-┌──────────────────────────────┐
-│ verify_symbol_libraries()    │
-│ (verify_project.sh)          │
-│                              │
-│ For each symbol library:     │
-│ - Parse all .kicad_sym files │
-│ - Check footprints           │
-│ - Check datasheets           │
-└────────┬─────────────────────┘
-         │
-         v
-┌─────────────────────────────────┐
-│ verify_footprint_libraries()    │
-│ (verify_project.sh)             │
-│                                 │
-│ For each footprint library:     │
-│ - Parse all .kicad_mod files    │
-│ - Check 3D model references     │
-│ - Resolve model paths           │
-└────────┬────────────────────────┘
-         │
-         v
-┌─────────────────────┐
-│ Print summary       │
-│ Exit with status    │
-└─────────────────────┘
+```mermaid
+flowchart TD
+    A[User invokes<br/>kicad-shutil project] --> B[parse_project_file<br/>parser_project.sh]
+    B --> C[Returns pipe-delimited data:<br/>PROJECT_DIR, ENV_VAR, TEXT_VAR]
+    C --> D[Export KIPRJMOD + envs<br/>Locate library tables]
+    D --> E[verify_table_file<br/>verify_table.sh]
+    E --> F[- Resolve environment vars<br/>- Validate library paths]
+    F --> G[verify_symbol_libraries<br/>verify_project.sh]
+    G --> H[For each symbol library:<br/>- Parse .kicad_sym files<br/>- Check footprints<br/>- Check datasheets]
+    H --> I[verify_footprint_libraries<br/>verify_project.sh]
+    I --> J[For each footprint library:<br/>- Parse .kicad_mod files<br/>- Check 3D models<br/>- Resolve model paths]
+    J --> K[Print summary<br/>Exit with status]
+
+    style B fill:#e1f5ff
+    style E fill:#fff4e6
+    style G fill:#f3e5f5
+    style I fill:#f3e5f5
+    style K fill:#e8f5e9
 ```
 
 ## 4. Design Patterns
@@ -391,6 +508,51 @@ PROP|Footprint|Package_SO:SOIC-8_3.9x4.9mm_P1.27mm|19
 PROP|Datasheet|https://www.ti.com/lit/ds/symlink/tps54331.pdf|21
 ```
 
+**Data Format Structure:**
+
+```mermaid
+classDiagram
+    class SymbolData {
+        +string type
+        +string name
+        +int start_line
+        +int props_end_line
+    }
+
+    class PropertyData {
+        +string type
+        +string key
+        +string value
+        +int line_number
+    }
+
+    class ProjectData {
+        +string type
+        +string path_or_name
+        +string value
+    }
+
+    class FootprintData {
+        +string type
+        +string name_or_path
+        +string transform_data
+    }
+
+    class LibraryTableData {
+        +string type
+        +string name
+        +string uri
+        +bool disabled
+    }
+
+    SymbolData --> PropertyData : contains
+    note for SymbolData "Format: SYMBOL|name|start_line|props_end_line\nParser: parser.sh"
+    note for PropertyData "Format: PROP|key|value|line_number\nConsumers: verify.sh, digikey.sh, writer.sh"
+    note for ProjectData "Formats:\nPROJECT_DIR|/path\nTEXT_VAR|name|value\nENV_VAR|name|value\nParser: parser_project.sh"
+    note for FootprintData "Formats:\nFOOTPRINT|name\nMODEL|path|at|xyz|scale|xyz|rotate|xyz\nParser: parser_footprint.sh"
+    note for LibraryTableData "Format: LIB|name|type|uri|disabled\nParser: verify_table.sh (S-expression)"
+```
+
 <!-- @ARCH-PATTERN-004@ (FROM: @REQ-PROJ-001@) -->
 ### Environment Variable Resolution
 Hierarchical resolution strategy for KiCad paths.
@@ -401,6 +563,9 @@ Hierarchical resolution strategy for KiCad paths.
 3. Global KiCad environment variables
 4. Fallback to literal path (no resolution)
 
+> [!WARNING]
+> KIPRJMOD resolution requires project context - use project verification command.
+
 **Implementation:**
 ```bash
 resolve_kicad_path() {
@@ -409,6 +574,30 @@ resolve_kicad_path() {
     # Try project vars first, then global vars
     echo "$resolved_path"
 }
+```
+
+**Resolution Flow:**
+
+```mermaid
+flowchart TD
+    A[Path with variable] --> B{Check project-specific<br/>environment vars}
+    B -->|Found| C[Replace variable]
+    B -->|Not found| D{Check KIPRJMOD}
+    D -->|Is KIPRJMOD| E[Use project directory]
+    D -->|Not KIPRJMOD| F{Check global<br/>KiCad env vars}
+    F -->|Found in KICAD_ENV| C
+    F -->|Not found| G[Leave unresolved<br/>Return error]
+    C --> H[Recursively resolve<br/>nested variables]
+    H --> I{Max iterations<br/>reached?}
+    I -->|No| B
+    I -->|Yes| J[Circular reference<br/>Return error]
+    E --> C
+
+    style A fill:#e1f5ff
+    style C fill:#e8f5e9
+    style G fill:#ffcdd2
+    style J fill:#ffcdd2
+    style H fill:#fff4e6
 ```
 
 ## 5. Testing Strategy
@@ -436,6 +625,56 @@ test/
 - Tests disable color output for consistent assertions
 - Integration tests require DigiKey API credentials (skipped in CI)
 - CI runs all tests except DigiKey integration
+
+**Test-to-Implementation Mapping:**
+
+```mermaid
+graph LR
+    subgraph "Implementation"
+        P1[parser.sh]
+        P2[parser_project.sh]
+        P3[parser_footprint.sh]
+        V1[verify.sh]
+        V2[verify_project.sh]
+        U[utils.sh]
+        W[writer.sh]
+        D[datasheet.sh]
+        DK[digikey.sh]
+    end
+
+    subgraph "Tests"
+        TP1[test_parser.sh]
+        TP2[test_parser_project.sh]
+        TP3[test_parser_footprint.sh]
+        TV1[test_verify.sh]
+        TV2[test_verify_project.sh]
+        TU[test_utils.sh]
+        TW[test_writer.sh]
+        TD[test_datasheet.sh]
+        TDK[test_digikey.sh]
+    end
+
+    TP1 -.tests.-> P1
+    TP2 -.tests.-> P2
+    TP3 -.tests.-> P3
+    TV1 -.tests.-> V1
+    TV2 -.tests.-> V2
+    TU -.tests.-> U
+    TW -.tests.-> W
+    TD -.tests.-> D
+    TDK -.tests.-> DK
+
+    style P1 fill:#e1f5ff
+    style P2 fill:#e1f5ff
+    style P3 fill:#e1f5ff
+    style V1 fill:#fff4e6
+    style V2 fill:#fff4e6
+    style TP1 fill:#c8e6c9
+    style TP2 fill:#c8e6c9
+    style TP3 fill:#c8e6c9
+    style TV1 fill:#c8e6c9
+    style TV2 fill:#c8e6c9
+```
 
 <!-- @ARCH-TEST-002@ (FROM: @REQ-QA-001@) -->
 ### Test Data Management

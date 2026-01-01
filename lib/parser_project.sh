@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# @IMPL-PARSER-002@ (FROM: @ARCH-PARSER-002@)
+# @IMPL-PARSER-PROJECT-001@ (FROM: @ARCH-PARSER-002@)
 # parser_project.sh - Parser for KiCad project files (.kicad_pro)
 # Extracts environment variables, text variables, and KIPRJMOD path
 

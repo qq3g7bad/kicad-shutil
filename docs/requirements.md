@@ -1,5 +1,27 @@
 # Requirements Specification
 
+## Table of Contents
+- [1. Project Verification](#1-project-verification)
+- [2. Symbol Library Management](#2-symbol-library-management)
+- [3. File Operations](#3-file-operations)
+- [4. Cross-Platform Compatibility](#4-cross-platform-compatibility)
+- [5. Command-Line Interface](#5-command-line-interface)
+- [6. Quality Assurance](#6-quality-assurance)
+- [7. Future Requirements](#7-future-requirements)
+
+## Requirements Summary
+
+| Category | Count | Status |
+|----------|-------|--------|
+| Project Verification | 4 | ✅ Implemented |
+| Symbol Library Management | 4 | ✅ Implemented |
+| File Operations | 4 | ✅ Implemented |
+| Cross-Platform Compatibility | 2 | ✅ Implemented |
+| Command-Line Interface | 3 | ✅ Implemented |
+| Quality Assurance | 2 | ✅ Implemented |
+| Future Requirements | 1 | 🔄 Planned |
+| **Total** | **20** | **95% Complete** |
+
 ## 1. Project Verification
 
 <!-- @REQ-PROJ-001@ -->
@@ -46,6 +68,21 @@ The system shall provide comprehensive verification reports with statistics.
 - Report missing footprints, datasheets, and 3D models
 - Display errors and warnings with appropriate severity levels
 - Support debug mode for detailed output
+
+**Output Format Examples:**
+
+Default mode (errors only):
+```
+[ERROR] sym-lib CustomLib FILE_NOT_FOUND
+[WARN] fp-lib Resistor_SMD R_0603 MISSING_3D_MODEL
+```
+
+Verbose mode (with details):
+```
+[INFO] Verifying symbol library table: sym-lib-table
+[OK] sym-lib Power_Management: /usr/share/kicad/symbols/Power_Management.kicad_sym
+[ERROR] sym-lib CustomLib FILE_NOT_FOUND /path/to/CustomLib.kicad_sym
+```
 
 ## 2. Symbol Library Management
 
@@ -145,6 +182,18 @@ The system shall use POSIX-compliant shell constructs where possible.
 - Work on Linux, macOS, and Windows (Git Bash)
 - Avoid GNU-specific tools where possible
 - Use portable AWK, sed, grep patterns
+
+**Platform-Specific Notes:**
+
+| Platform | Shell | AWK | Notes |
+|----------|-------|-----|-------|
+| Linux | bash 4.0+ | GNU awk | Default, fully tested |
+| macOS | bash 3.2+ (4.0+ recommended) | BSD awk | Compatible, CI tested |
+| Windows | Git Bash 4.0+ | GNU awk | Via Git for Windows |
+
+**Known Limitations:**
+- macOS: Default bash 3.2 lacks associative arrays - install bash 4.0+ via Homebrew
+- Windows: Requires Git Bash (included with Git for Windows)
 
 <!-- @REQ-PLAT-002@ -->
 ### Zero External Dependencies
