@@ -2,7 +2,7 @@
 
 ## 1. System Architecture
 
-<!-- @ARCH-MAIN-001@ (FROM: @REQ-CLI-001@) -->
+<!-- @ARCH-MAIN-001@ (FROM: @REQ-CLI-001@, @REQ-CLI-002@, @REQ-CLI-003@) -->
 ### Command Router (kicad-shutil)
 The main executable routes commands to appropriate subcommand handlers.
 
@@ -11,15 +11,20 @@ The main executable routes commands to appropriate subcommand handlers.
   - Handles `project` and `sym` subcommands
   - Implements implicit routing for `.kicad_pro` files
   - Manages global `--verbose` flag
+  - Supports batch processing of multiple files
 - `cmd_project()` - Project verification workflow
 - `cmd_sym()` - Symbol library management workflow
+  - Accepts multiple `.kicad_sym` files for batch processing
+  - Aggregates statistics across all files
 - `usage()` / `usage_project()` / `usage_sym()` - Help message generators
 
 **Design Decisions:**
 - Subcommand-based interface for extensibility
 - Lazy loading of library modules (only source when needed)
 - Global VERBOSE flag for verbose output control
+- UNIX Philosophy: Silent on success, errors to stderr
 - Exit codes: 0 = success, 1 = failure, 2 = usage error
+- Batch processing: Sequential file processing with aggregated results
 
 ## 2. Library Modules
 
@@ -81,14 +86,22 @@ FOOTPRINT|footprint_name
 MODEL|/path/to/model.wrl|at|x y z|scale|x y z|rotate|x y z
 ```
 
-<!-- @ARCH-VERIFY-001@ (FROM: @REQ-PROJ-001@, @REQ-PROJ-002@, @REQ-PROJ-003@) -->
+<!-- @ARCH-VERIFY-001@ (FROM: @REQ-PROJ-001@, @REQ-PROJ-002@, @REQ-PROJ-003@, @REQ-PROJ-004@) -->
 ### Verification Dispatcher (lib/verify.sh)
 Routes verification requests to appropriate handlers based on file type.
 
 **Functions:**
 - `verify_file()` - Dispatch to file-type-specific verifier
 - `init_verify_stats()` - Initialize statistics counters
-- `print_verify_report()` - Generate verification summary
+- `print_verify_report()` - Generate comprehensive verification summary
+
+**Reporting Features (REQ-PROJ-004):**
+- Statistics aggregation: total symbols, OK count, issue count
+- Issue categorization: missing footprints, datasheets, 3D models
+- Severity levels: errors (red), warnings (yellow), info (blue)
+- Detailed issue breakdown grouped by file
+- Color-coded output for terminal readability
+- VERBOSE mode control: full reports only when --verbose is set
 
 **Design Pattern:**
 - Strategy pattern: different verification strategies per file type
@@ -157,7 +170,7 @@ Atomic file modification with automatic backups.
 - Verify integrity before committing changes
 - Automatic rollback on failure
 
-<!-- @ARCH-DIGIKEY-001@ (FROM: @REQ-SYM-002@) -->
+<!-- @ARCH-DIGIKEY-001@ (FROM: @REQ-SYM-002@, @REQ-SYM-003@) -->
 ### DigiKey API Integration (lib/digikey.sh)
 OAuth2-based DigiKey API client with caching.
 
@@ -165,7 +178,20 @@ OAuth2-based DigiKey API client with caching.
 - `get_digikey_token()` - OAuth2 client credentials flow
 - `search_digikey_part()` - Search by manufacturer + part number
 - `process_digikey()` - Interactive DigiKey metadata workflow
-- `delete_digikey_info()` - Remove DigiKey metadata
+- `delete_digikey_info()` - Remove DigiKey metadata (REQ-SYM-003)
+
+**Metadata Addition (REQ-SYM-002):**
+- Interactive selection when multiple candidates found
+- Preserves existing symbol properties
+- Stores DigiKey part number in "DigiKey" property
+- Stores DigiKey product URL in "DigiKey URL" property
+- Automatic backups before modification
+
+**Metadata Removal (REQ-SYM-003):**
+- Deletes "DigiKey" and "DigiKey URL" properties
+- Preserves all other symbol properties
+- Uses atomic write pattern with backup/restore
+- Batch processing support for multiple files
 
 **Caching Strategy:**
 - In-memory token cache (1 hour expiry)
@@ -424,6 +450,38 @@ test/fixtures/
 ├── sym-lib-table               # Sample symbol table
 └── fp-lib-table                # Sample footprint table
 ```
+
+<!-- @ARCH-QA-001@ (FROM: @REQ-QA-002@) -->
+### Static Analysis and Code Quality
+
+**ShellCheck Integration:**
+- All shell scripts checked with ShellCheck
+- Configuration via `.shellcheckrc`
+- Pre-commit hooks enforce compliance
+- Zero critical/high-severity warnings policy
+
+**ShellCheck Configuration:**
+```bash
+# .shellcheckrc
+disable=SC2317  # Unreachable code (false positives in trap handlers)
+shell=bash
+```
+
+**Pre-commit Hooks:**
+- Automatic ShellCheck on all modified `.sh` files
+- Blocks commits with ShellCheck failures
+- Can be bypassed with `--no-verify` (not recommended)
+
+**Code Formatting:**
+- Uses `shfmt` for consistent formatting
+- Enforced via pre-commit hooks
+- Tab indentation, POSIX-style functions
+
+**Coverage:**
+- Main executable: `kicad-shutil`
+- All library modules: `lib/*.sh`
+- All test files: `test/*.sh`
+- CI integration: GitHub Actions workflow
 
 ## 6. Configuration Management
 

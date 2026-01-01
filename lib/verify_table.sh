@@ -71,7 +71,6 @@ verify_table_file() {
 		fi
 
 		# Skip disabled libraries
-		# <!-- @IMPL-VERIFY-TABLE-001@ (FROM: @REQ-PROJ-001@) -->
 		if echo "$entry" | grep -qE '\(disabled\)'; then
 			[[ "${VERBOSE:-false}" == "true" ]] && info "Skipping disabled library in $table_file"
 			continue

@@ -259,7 +259,6 @@ verify_symbol_libraries() {
 			fi
 
 			# Skip disabled libraries
-			# <!-- @IMPL-VERIFY-PROJECT-003@ (FROM: @REQ-PROJ-001@) -->
 			if echo "$entry" | grep -qE '\(disabled\)'; then
 				continue
 			fi
@@ -313,7 +312,6 @@ verify_symbol_libraries() {
 		fi
 
 		# Skip disabled libraries
-		# <!-- @IMPL-VERIFY-PROJECT-001@ (FROM: @REQ-PROJ-001@) -->
 		if echo "$entry" | grep -qE '\(disabled\)'; then
 			[[ "${VERBOSE:-false}" == "true" ]] && info "Skipping disabled symbol library: $lib_name"
 			continue
@@ -424,7 +422,6 @@ verify_footprint_libraries() {
 		fi
 
 		# Skip disabled libraries
-		# <!-- @IMPL-VERIFY-PROJECT-002@ (FROM: @REQ-PROJ-001@) -->
 		if echo "$entry" | grep -qE '\(disabled\)'; then
 			continue
 		fi
