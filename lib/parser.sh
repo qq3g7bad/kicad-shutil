@@ -2,8 +2,8 @@
 
 # parser.sh - S-expression parser for KiCad symbol files
 # Parses .kicad_sym files and extracts symbol metadata
-# shellcheck disable=SC2155  # Declare and assign separately - acceptable for parser performance
 
+# @IMPL-PARSER-001@ (FROM: @ARCH-PARSER-001@)
 # Parse a .kicad_sym file and extract all symbols with their properties
 # Output format:
 #   SYMBOL|symbol_name|start_line|props_end_line
@@ -34,11 +34,12 @@ parse_file() {
 
     # Detect main symbol start: (symbol "NAME" where NAME doesnt match _N_M pattern
     /^[[:space:]]*\(symbol "[^"]+"/ {
-        # Extract the candidate symbol name (BSD awk compatible - using split)
-        # Format: (symbol "NAME" ...
-        # Split by double quotes to get the symbol name
-        split($0, name_parts, "\"")
-        candidate_name = name_parts[2]
+        # Extract the candidate symbol name (BSD awk compatible)
+        candidate_name = ""
+        pos = match($0, /"[^"]+"/)
+        if (pos > 0) {
+            candidate_name = substr($0, RSTART+1, RLENGTH-2)
+        }
 
         # Check if this is a nested graphical symbol (contains _N_M pattern at end)
         # Pattern: NAME_1_1, NAME_2_1, NAME_0_0, etc.
@@ -63,18 +64,23 @@ parse_file() {
         in_property = 1
         property_depth = 0
 
-        # Extract property name and value (BSD awk compatible - using split)
+        # Extract property name and value (BSD awk compatible)
         # Handle multi-line by only capturing on the opening line
-        # Format: (property "NAME" "VALUE" ...
         if ($0 ~ /\(property "[^"]+" "[^"]*"/) {
-            # Split by double quotes to get property name and value
-            # Parts: [0]=(property , [1]=empty, [2]=NAME, [3]= , [4]=VALUE, ...
-            split($0, prop_parts, "\"")
-            prop_name = prop_parts[2]
-            prop_value = prop_parts[4]
-
-            properties[prop_name] = prop_value
-            prop_lines[prop_name] = NR
+            # Find first quoted string (property name)
+            line = $0
+            pos = match(line, /"[^"]+"/)
+            if (pos > 0) {
+                prop_name = substr(line, RSTART+1, RLENGTH-2)
+                # Remove first quoted part and find second quoted string (value)
+                line = substr(line, RSTART+RLENGTH)
+                pos = match(line, /"[^"]*"/)
+                if (pos > 0) {
+                    prop_value = substr(line, RSTART+1, RLENGTH-2)
+                    properties[prop_name] = prop_value
+                    prop_lines[prop_name] = NR
+                }
+            }
         }
     }
 
@@ -133,6 +139,7 @@ parse_file() {
     ' "$file"
 }
 
+# @IMPL-PARSER-002@ (FROM: @ARCH-PARSER-001@)
 # Get property value for a specific symbol
 # Usage: get_property <symbols_data> <symbol_name> <property_name>
 get_property() {
@@ -148,6 +155,7 @@ get_property() {
     '
 }
 
+# @IMPL-PARSER-003@ (FROM: @ARCH-PARSER-001@)
 # Get all properties for a symbol
 # Output: property_name|property_value|line_number (one per line)
 get_all_properties() {
@@ -161,6 +169,7 @@ get_all_properties() {
     '
 }
 
+# @IMPL-PARSER-004@ (FROM: @ARCH-PARSER-001@)
 # Get symbol metadata (start_line, props_end_line)
 # Output: start_line|props_end_line
 get_symbol_metadata() {
@@ -172,6 +181,7 @@ get_symbol_metadata() {
     '
 }
 
+# @IMPL-PARSER-005@ (FROM: @ARCH-PARSER-001@)
 # List all symbol names in the file
 list_symbols() {
 	local symbols_data="$1"
@@ -181,6 +191,7 @@ list_symbols() {
     '
 }
 
+# @IMPL-PARSER-006@ (FROM: @ARCH-PARSER-001@)
 # Count symbols in the parsed data
 count_symbols() {
 	local symbols_data="$1"
@@ -188,6 +199,7 @@ count_symbols() {
 	echo "$symbols_data" | grep -c "^SYMBOL|" || echo "0"
 }
 
+# @IMPL-PARSER-007@ (FROM: @ARCH-PARSER-001@)
 # Check if a property exists for a symbol
 # Returns 0 if exists, 1 if not
 has_property() {
@@ -195,7 +207,8 @@ has_property() {
 	local symbol_name="$2"
 	local property_name="$3"
 
-	local value=$(get_property "$symbols_data" "$symbol_name" "$property_name")
+	local value
+	value=$(get_property "$symbols_data" "$symbol_name" "$property_name")
 	[[ -n "$value" ]]
 }
 
@@ -203,8 +216,10 @@ has_property() {
 print_symbols_summary() {
 	local symbols_data="$1"
 
-	local symbols=$(list_symbols "$symbols_data")
-	local count=$(count_symbols "$symbols_data")
+	local symbols
+	symbols=$(list_symbols "$symbols_data")
+	local count
+	count=$(count_symbols "$symbols_data")
 
 	echo "Found $count symbol(s):"
 	echo
@@ -212,7 +227,8 @@ print_symbols_summary() {
 	while IFS= read -r symbol; do
 		echo "Symbol: $symbol"
 
-		local props=$(get_all_properties "$symbols_data" "$symbol")
+		local props
+		props=$(get_all_properties "$symbols_data" "$symbol")
 		while IFS='|' read -r prop_name prop_value prop_line; do
 			printf "  %-20s = %s (line %s)\n" "$prop_name" "$prop_value" "$prop_line"
 		done <<<"$props"

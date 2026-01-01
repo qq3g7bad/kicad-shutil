@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 
+# @TEST-PARSER-001@ (FROM: @IMPL-PARSER-001@)
 # Unit tests for lib/parser.sh
 
 # Setup test environment
@@ -8,16 +9,17 @@ LIB_DIR="$SCRIPT_DIR/lib"
 TEST_DIR="$(dirname "${BASH_SOURCE[0]}")"
 FIXTURES_DIR="$TEST_DIR/fixtures"
 
-# Disable color output (must be set before sourcing)
+# Source dependencies
+source "$LIB_DIR/utils.sh"
+source "$LIB_DIR/parser.sh"
+
+# Disable color output (exported for sourced scripts)
+# shellcheck disable=SC2034  # Variables used by sourced modules
 export COLOR_RED=""
 export COLOR_GREEN=""
 export COLOR_YELLOW=""
 export COLOR_BLUE=""
 export COLOR_RESET=""
-
-# Source required modules
-source "$LIB_DIR/utils.sh"
-source "$LIB_DIR/parser.sh"
 
 #-----------------------------------
 # Test Setup
@@ -69,6 +71,8 @@ oneTimeTearDown() {
 #-----------------------------------
 # Test: parse_file() and list_symbols() function
 #-----------------------------------
+# @TEST-PARSER-002@ (FROM: @IMPL-PARSER-001@, @IMPL-PARSER-005@)
+# Test parsing and listing symbols from .kicad_sym file
 testListSymbols() {
 	if ! declare -f parse_file >/dev/null || ! declare -f list_symbols >/dev/null; then
 		startSkipping
@@ -88,6 +92,8 @@ testListSymbols() {
 #-----------------------------------
 # Test: get_property() function
 #-----------------------------------
+# @TEST-PARSER-003@ (FROM: @IMPL-PARSER-002@)
+# Test extracting Footprint property from symbol
 testGetPropertyFootprint() {
 	if ! declare -f parse_file >/dev/null || ! declare -f get_property >/dev/null; then
 		startSkipping
@@ -103,6 +109,8 @@ testGetPropertyFootprint() {
 	assertEquals "Should extract footprint" "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm" "$footprint"
 }
 
+# @TEST-PARSER-004@ (FROM: @IMPL-PARSER-002@)
+# Test extracting Datasheet property from symbol
 testGetPropertyDatasheet() {
 	if ! declare -f parse_file >/dev/null || ! declare -f get_property >/dev/null; then
 		startSkipping
@@ -118,6 +126,8 @@ testGetPropertyDatasheet() {
 	assertEquals "Should extract datasheet URL" "https://example.com/datasheet.pdf" "$datasheet"
 }
 
+# @TEST-PARSER-005@ (FROM: @IMPL-PARSER-002@)
+# Test extracting empty property value
 testGetPropertyEmpty() {
 	if ! declare -f parse_file >/dev/null || ! declare -f get_property >/dev/null; then
 		startSkipping
@@ -136,6 +146,8 @@ testGetPropertyEmpty() {
 #-----------------------------------
 # Test: count_symbols() function
 #-----------------------------------
+# @TEST-PARSER-006@ (FROM: @IMPL-PARSER-006@)
+# Test counting symbols in parsed data
 testCountSymbols() {
 	if ! declare -f parse_file >/dev/null || ! declare -f count_symbols >/dev/null; then
 		startSkipping

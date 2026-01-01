@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 
+# @IMPL-WRITER-001@ (FROM: @ARCH-WRITER-001@)
 # writer.sh - Property insertion and modification for KiCad symbol files
 # Handles atomic writes with backup
 
@@ -68,7 +69,7 @@ insert_property() {
 
 	# Get indentation from the previous property line
 	local indent
-	indent=$(sed -n "${insert_after_line}p" "$file" | sed 's/^\(\s*\).*/\1/')
+	indent=$(sed -n "${insert_after_line}p" "$file" | sed 's/^\([[:space:]]*\).*/\1/')
 
 	# If no indent found (no properties yet), use default 4 spaces
 	if [[ -z "$indent" ]]; then
@@ -268,7 +269,7 @@ delete_property() {
 
 	local temp_file="${file}.tmp.$$"
 
-	if awk -v symbol="$symbol_name" -v prop="$prop_name" '
+	awk -v symbol="$symbol_name" -v prop="$prop_name" '
     BEGIN {
         in_symbol = 0
         in_property = 0
@@ -276,16 +277,16 @@ delete_property() {
         depth = 0
         prop_depth = 0
     }
-
+    
     # Track when we enter the target symbol
-    /^\s*\(symbol/ {
+    /^[[:space:]]*\(symbol/ {
         if ($0 ~ "\\(symbol \"" symbol "\"") {
             in_symbol = 1
         }
     }
-
+    
     # If in target symbol, check for the property
-    in_symbol && /^\s*\(property/ {
+    in_symbol && /^[[:space:]]*\(property/ {
         if ($0 ~ "\\(property \"" prop "\"") {
             in_property = 1
             skip_property = 1
@@ -293,7 +294,7 @@ delete_property() {
             next  # Skip this line
         }
     }
-
+    
     # If we are skipping a property, track parentheses to know when it ends
     skip_property {
         prop_depth += gsub(/\(/, "(", $0) - gsub(/\)/, ")", $0)
@@ -303,20 +304,20 @@ delete_property() {
         }
         next  # Skip lines within the property
     }
-
+    
     # Exit symbol when we find the closing parenthesis at depth 0
-    in_symbol && /^\s*\)/ {
+    in_symbol && /^[[:space:]]*\)/ {
         # Simple heuristic: if line is just ")" or "  )", it might close the symbol
-        if ($0 ~ /^\s*\)\s*$/) {
+        if ($0 ~ /^[[:space:]]*\)[[:space:]]*$/) {
             in_symbol = 0
         }
     }
-
+    
     # Print all other lines
     { print }
-    ' "$file" >"$temp_file"; then
-		mv "$temp_file" "$file"
+    ' "$file" >"$temp_file"
 
+	if mv "$temp_file" "$file"; then
 		# Verify the file is still valid after modification
 		if ! verify_file_integrity "$file"; then
 			error "File integrity check failed after property deletion"

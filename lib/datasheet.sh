@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 
+# @IMPL-DATASHEET-001@ (FROM: @ARCH-DATASHEET-001@)
 # datasheet.sh - Datasheet download module for kicad-shutil
 # Bulk download datasheets from symbol Datasheet properties
 
@@ -27,7 +28,7 @@ download_datasheets() {
 	local category="$3"
 
 	# Initialize stats if not done
-	if [[ -z "${DATASHEET_STATS_TOTAL:-}" ]]; then
+	if [[ "$DATASHEET_STATS_TOTAL" -eq 0 ]] && [[ "$DATASHEET_STATS_SUCCESS" -eq 0 ]]; then
 		init_datasheet_stats
 	fi
 
@@ -133,11 +134,11 @@ get_file_extension_from_url() {
 
 # Print datasheet download summary
 print_datasheet_summary() {
-	local total=${DATASHEET_STATS_TOTAL:-0}
-	local success=${DATASHEET_STATS_SUCCESS:-0}
-	local failed=${DATASHEET_STATS_FAILED:-0}
-	local missing=${DATASHEET_STATS_MISSING:-0}
-	local skipped=${DATASHEET_STATS_SKIPPED:-0}
+	local total=$DATASHEET_STATS_TOTAL
+	local success=$DATASHEET_STATS_SUCCESS
+	local failed=$DATASHEET_STATS_FAILED
+	local missing=$DATASHEET_STATS_MISSING
+	local skipped=$DATASHEET_STATS_SKIPPED
 
 	if [[ $total -eq 0 ]]; then
 		return

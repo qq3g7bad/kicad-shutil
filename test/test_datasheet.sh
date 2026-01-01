@@ -1,19 +1,13 @@
 #!/usr/bin/env bash
 
+# @TEST-DATASHEET-001@ (FROM: @IMPL-DATASHEET-001@)
 # Unit tests for lib/datasheet.sh
-# shellcheck disable=SC2155  # Declare and assign separately - not critical in tests
 
 # Setup test environment
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LIB_DIR="$SCRIPT_DIR/lib"
+# shellcheck disable=SC2034  # Used in test functions
 TEST_DIR="$(dirname "${BASH_SOURCE[0]}")"
-
-# Disable color output (must be set before sourcing)
-export COLOR_RED=""
-export COLOR_GREEN=""
-export COLOR_YELLOW=""
-export COLOR_BLUE=""
-export COLOR_RESET=""
 
 # Source dependencies
 source "$LIB_DIR/utils.sh"
@@ -24,7 +18,8 @@ source "$LIB_DIR/datasheet.sh"
 if ! type get_file_extension_from_url >/dev/null 2>&1; then
 	get_file_extension_from_url() {
 		local url="$1"
-		local basename=$(basename "${url%%\?*}")
+		local basename
+		basename=$(basename "${url%%\?*}")
 		local ext="${basename##*.}"
 		if [[ "$basename" == "$ext" ]] || [[ -z "$ext" ]]; then
 			echo ""
@@ -34,9 +29,21 @@ if ! type get_file_extension_from_url >/dev/null 2>&1; then
 	}
 fi
 
+# Disable color output for consistent test results
+# shellcheck disable=SC2034  # Variables used by sourced modules
+export COLOR_RED=""
+export COLOR_GREEN=""
+export COLOR_YELLOW=""
+export COLOR_BLUE=""
+export COLOR_RESET=""
+
 # Mock spinner functions
 start_spinner() { :; }
 stop_spinner() { :; }
+
+# Export DATASHEET_DIR for use in test functions
+# shellcheck disable=SC2034  # Set in each test function
+export DATASHEET_DIR=""
 
 # Mock download_file to avoid real downloads
 download_file() {
@@ -123,9 +130,7 @@ setUp() {
 	init_datasheet_stats
 
 	# Clean output directory
-	if [[ -n "$TEST_OUTPUT_DIR" && "$TEST_OUTPUT_DIR" != "/" ]]; then
-		rm -rf "${TEST_OUTPUT_DIR:?}"/*
-	fi
+	rm -rf "${TEST_OUTPUT_DIR:?}"/*
 }
 
 #-----------------------------------
@@ -146,21 +151,24 @@ testInitDatasheetStats() {
 #-----------------------------------
 testGetFileExtensionFromUrlPDF() {
 	local url="https://example.com/datasheet.pdf"
-	local result=$(get_file_extension_from_url "$url")
+	local result
+	result=$(get_file_extension_from_url "$url")
 
 	assertEquals "pdf" "$result"
 }
 
 testGetFileExtensionFromUrlWithQuery() {
 	local url="https://example.com/datasheet.pdf?download=true"
-	local result=$(get_file_extension_from_url "$url")
+	local result
+	result=$(get_file_extension_from_url "$url")
 
 	assertEquals "pdf" "$result"
 }
 
 testGetFileExtensionFromUrlNoExtension() {
 	local url="https://example.com/datasheet"
-	local result=$(get_file_extension_from_url "$url")
+	local result
+	result=$(get_file_extension_from_url "$url")
 
 	# Should return empty string
 	assertEquals "" "$result"
@@ -168,7 +176,8 @@ testGetFileExtensionFromUrlNoExtension() {
 
 testGetFileExtensionFromUrlDOC() {
 	local url="https://example.com/datasheet.doc"
-	local result=$(get_file_extension_from_url "$url")
+	local result
+	result=$(get_file_extension_from_url "$url")
 
 	assertEquals "doc" "$result"
 }
@@ -177,7 +186,8 @@ testGetFileExtensionFromUrlDOC() {
 # Test: download_symbol_datasheet() with HTTP URL
 #-----------------------------------
 testDownloadSymbolDatasheetHTTP() {
-	local symbols_data=$(parse_file "$TEST_SYMBOL_FILE")
+	local symbols_data
+	symbols_data=$(parse_file "$TEST_SYMBOL_FILE")
 	DATASHEET_DIR="$TEST_OUTPUT_DIR"
 
 	download_symbol_datasheet "$TEST_SYMBOL_FILE" "$symbols_data" "WithHTTPDatasheet" "$TEST_OUTPUT_DIR/test" 2>/dev/null
@@ -191,7 +201,8 @@ testDownloadSymbolDatasheetHTTP() {
 # Test: download_symbol_datasheet() with local path
 #-----------------------------------
 testDownloadSymbolDatasheetLocal() {
-	local symbols_data=$(parse_file "$TEST_SYMBOL_FILE")
+	local symbols_data
+	symbols_data=$(parse_file "$TEST_SYMBOL_FILE")
 	DATASHEET_DIR="$TEST_OUTPUT_DIR"
 
 	download_symbol_datasheet "$TEST_SYMBOL_FILE" "$symbols_data" "WithLocalDatasheet" "$TEST_OUTPUT_DIR/test" 2>/dev/null
@@ -205,7 +216,8 @@ testDownloadSymbolDatasheetLocal() {
 # Test: download_symbol_datasheet() with no datasheet
 #-----------------------------------
 testDownloadSymbolDatasheetMissing() {
-	local symbols_data=$(parse_file "$TEST_SYMBOL_FILE")
+	local symbols_data
+	symbols_data=$(parse_file "$TEST_SYMBOL_FILE")
 	DATASHEET_DIR="$TEST_OUTPUT_DIR"
 
 	download_symbol_datasheet "$TEST_SYMBOL_FILE" "$symbols_data" "NoDatasheet" "$TEST_OUTPUT_DIR/test" 2>/dev/null
@@ -218,7 +230,8 @@ testDownloadSymbolDatasheetMissing() {
 # Test: download_symbol_datasheet() skip existing file
 #-----------------------------------
 testDownloadSymbolDatasheetSkipExisting() {
-	local symbols_data=$(parse_file "$TEST_SYMBOL_FILE")
+	local symbols_data
+	symbols_data=$(parse_file "$TEST_SYMBOL_FILE")
 	DATASHEET_DIR="$TEST_OUTPUT_DIR"
 
 	# Create output directory and file
@@ -231,7 +244,8 @@ testDownloadSymbolDatasheetSkipExisting() {
 	assertEquals "1" "${DATASHEET_STATS_SKIPPED}"
 
 	# Content should not change
-	local content=$(cat "$TEST_OUTPUT_DIR/test/WithHTTPDatasheet.pdf")
+	local content
+	content=$(cat "$TEST_OUTPUT_DIR/test/WithHTTPDatasheet.pdf")
 	assertEquals "existing content" "$content"
 }
 
@@ -239,7 +253,8 @@ testDownloadSymbolDatasheetSkipExisting() {
 # Test: download_datasheets() for all symbols
 #-----------------------------------
 testDownloadDatasheetsAll() {
-	local symbols_data=$(parse_file "$TEST_SYMBOL_FILE")
+	local symbols_data
+	symbols_data=$(parse_file "$TEST_SYMBOL_FILE")
 	DATASHEET_DIR="$TEST_OUTPUT_DIR"
 
 	download_datasheets "$TEST_SYMBOL_FILE" "$symbols_data" "test_category" 2>/dev/null
@@ -260,7 +275,8 @@ testPrintDatasheetSummary() {
 	DATASHEET_STATS_MISSING=1
 	DATASHEET_STATS_SKIPPED=1
 
-	local output=$(print_datasheet_summary 2>&1)
+	local output
+	output=$(print_datasheet_summary 2>&1)
 
 	assertContains "$output" "10"
 	assertContains "$output" "7"
@@ -272,7 +288,6 @@ testPrintDatasheetSummary() {
 testStatisticsAccumulation() {
 	local symbols_data
 	symbols_data=$(parse_file "$TEST_SYMBOL_FILE")
-	# shellcheck disable=SC2034  # DATASHEET_DIR used by download functions
 	DATASHEET_DIR="$TEST_OUTPUT_DIR"
 
 	# Download multiple times

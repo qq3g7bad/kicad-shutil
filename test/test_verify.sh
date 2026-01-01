@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 
+# @TEST-VERIFY-001@ (FROM: @IMPL-VERIFY-001@)
 # Unit tests for lib/verify.sh
 
 # Setup test environment
@@ -7,17 +8,17 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LIB_DIR="$SCRIPT_DIR/lib"
 TEST_DIR="$(dirname "${BASH_SOURCE[0]}")"
 
-# Disable color output (must be set before sourcing)
+# Source dependencies
+source "$LIB_DIR/utils.sh"
+source "$LIB_DIR/parser.sh"
+source "$LIB_DIR/verify.sh"
+
+# Disable color output for consistent test results
 export COLOR_RED=""
 export COLOR_GREEN=""
 export COLOR_YELLOW=""
 export COLOR_BLUE=""
 export COLOR_RESET=""
-
-# Source dependencies
-source "$LIB_DIR/utils.sh"
-source "$LIB_DIR/parser.sh"
-source "$LIB_DIR/verify.sh"
 
 # Mock spinner functions to avoid background processes in tests
 start_spinner() { :; }

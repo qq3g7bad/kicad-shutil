@@ -1,24 +1,25 @@
 #!/usr/bin/env bash
 
+# @TEST-DIGIKEY-001@ (FROM: @IMPL-DIGIKEY-001@)
 # Unit tests for lib/digikey.sh
-# shellcheck disable=SC2155  # Declare and assign separately - not critical in tests
 
 # Setup test environment
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LIB_DIR="$SCRIPT_DIR/lib"
-# shellcheck disable=SC2034  # TEST_DIR may be used in future tests
+# shellcheck disable=SC2034  # Used by fixtures path
 TEST_DIR="$(dirname "${BASH_SOURCE[0]}")"
 
-# Disable color output (must be set before sourcing)
+# Source dependencies
+source "$LIB_DIR/utils.sh"
+source "$LIB_DIR/digikey.sh"
+
+# Disable color output for consistent test results
+# shellcheck disable=SC2034  # Variables used by sourced modules
 export COLOR_RED=""
 export COLOR_GREEN=""
 export COLOR_YELLOW=""
 export COLOR_BLUE=""
 export COLOR_RESET=""
-
-# Source dependencies
-source "$LIB_DIR/utils.sh"
-source "$LIB_DIR/digikey.sh"
 
 # Mock spinner functions
 start_spinner() { :; }
@@ -34,7 +35,8 @@ http_request() { echo '{"ProductsCount":0,"Products":[]}'; }
 testParseDigiKeyApiResponseSingleResult() {
 	local json_response='{"ProductsCount":1,"Products":[{"ProductUrl":"https://www.digikey.com/product-detail/en/296-1234-ND","ProductDescription":"IC TIMER 555 8-DIP","DetailedDescription":"Timer/Oscillator Single Bipolar 8-DIP","ProductVariations":[{"DigiKeyProductNumber":"296-1234-ND","UnitPrice":0.45,"MinimumOrderQuantity":1,"PackageType":{"Name":"Tube"}}]}]}'
 
-	local result=$(parse_digikey_api_response "$json_response")
+	local result
+	result=$(parse_digikey_api_response "$json_response")
 
 	assertNotNull "Result should not be empty" "$result"
 	assertContains "$result" "296-1234-ND"
@@ -45,7 +47,8 @@ testParseDigiKeyApiResponseSingleResult() {
 testParseDigiKeyApiResponseMultipleResults() {
 	local json_response='{"ProductsCount":2,"Products":[{"ProductUrl":"https://www.digikey.com/1","ProductDescription":"Desc1","DetailedDescription":"Detail1","ProductVariations":[{"DigiKeyProductNumber":"296-1234-ND","UnitPrice":0.45,"MinimumOrderQuantity":1}]},{"ProductUrl":"https://www.digikey.com/2","ProductDescription":"Desc2","DetailedDescription":"Detail2","ProductVariations":[{"DigiKeyProductNumber":"296-5678-ND","UnitPrice":0.50,"MinimumOrderQuantity":10}]}]}'
 
-	local result=$(parse_digikey_api_response "$json_response")
+	local result
+	result=$(parse_digikey_api_response "$json_response")
 
 	assertNotNull "Result should not be empty" "$result"
 
@@ -54,14 +57,16 @@ testParseDigiKeyApiResponseMultipleResults() {
 	assertContains "$result" "296-5678-ND"
 
 	# Count lines (should be 2)
-	local line_count=$(echo "$result" | grep -c "296-" || true)
+	local line_count
+	line_count=$(echo "$result" | grep -c "296-" || true)
 	assertEquals "2" "$line_count"
 }
 
 testParseDigiKeyApiResponseNoResults() {
 	local json_response='{"ProductsCount":0,"Products":[]}'
 
-	local result=$(parse_digikey_api_response "$json_response")
+	local result
+	result=$(parse_digikey_api_response "$json_response")
 
 	assertEquals "Result should be empty" "" "$result"
 }
@@ -70,7 +75,8 @@ testParseDigiKeyApiResponseMissingFields() {
 	# Test with missing UnitPrice in ProductVariations
 	local json_response='{"ProductsCount":1,"Products":[{"ProductUrl":"https://www.digikey.com/1","ProductDescription":"Desc1","DetailedDescription":"Detail1","ProductVariations":[{"DigiKeyProductNumber":"296-1234-ND","MinimumOrderQuantity":1}]}]}'
 
-	local result=$(parse_digikey_api_response "$json_response")
+	local result
+	result=$(parse_digikey_api_response "$json_response")
 
 	# Should be empty because price is required
 	assertEquals "Result should be empty when price is missing" "" "$result"
@@ -115,7 +121,8 @@ testDigiKeySearchRequestBody() {
 	local keyword="TLC555"
 
 	# This tests the heredoc JSON generation approach
-	local json=$(
+	local json
+	json=$(
 		cat <<EOF
 {
   "Keywords": "$keyword",

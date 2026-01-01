@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 
+# @TEST-WRITER-001@ (FROM: @IMPL-WRITER-001@)
 # Unit tests for lib/writer.sh
 
 # Setup test environment
@@ -8,17 +9,18 @@ LIB_DIR="$SCRIPT_DIR/lib"
 TEST_DIR="$(dirname "${BASH_SOURCE[0]}")"
 FIXTURES_DIR="$TEST_DIR/fixtures"
 
-# Disable color output (must be set before sourcing)
+# Source dependencies
+source "$LIB_DIR/utils.sh"
+source "$LIB_DIR/parser.sh"
+source "$LIB_DIR/writer.sh"
+
+# Disable color output
+# shellcheck disable=SC2034  # Variables used by sourced modules
 export COLOR_RED=""
 export COLOR_GREEN=""
 export COLOR_YELLOW=""
 export COLOR_BLUE=""
 export COLOR_RESET=""
-
-# Source dependencies
-source "$LIB_DIR/utils.sh"
-source "$LIB_DIR/parser.sh"
-source "$LIB_DIR/writer.sh"
 
 #-----------------------------------
 # Test Setup
