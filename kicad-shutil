@@ -4,7 +4,10 @@
 # kicad-shutil - KiCad Project Helper Utilities
 # Manage KiCad projects: verify libraries, symbols, footprints, and datasheets
 
-set -uo pipefail
+set -euo pipefail
+
+# Handle Ctrl-C to stop all tasks immediately
+trap 'echo "" >&2; echo "Interrupted by user" >&2; exit 130' INT TERM
 
 # Script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -13,6 +16,9 @@ CACHE_DIR="$SCRIPT_DIR/cache"
 
 # Verbose mode (set via --verbose flag)
 export VERBOSE=false
+
+# Deep verification mode (set via --deep flag)
+export DEEP=false
 
 # Source library modules
 source "$LIB_DIR/utils.sh"
@@ -76,6 +82,7 @@ This command performs comprehensive verification:
 
 OPTIONS:
     --verbose      Show detailed verbose output (INFO, OK, and summary)
+    --deep         Enable deep verification (datasheet URL validation)
     -h, --help     Show this help message
 
 EXAMPLES:
@@ -195,6 +202,10 @@ cmd_project() {
 				;;
 			--verbose)
 				export VERBOSE=true
+				shift
+				;;
+			--deep)
+				export DEEP=true
 				shift
 				;;
 			-*)

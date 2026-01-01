@@ -13,6 +13,7 @@ if [[ -t 1 ]] && command -v tput >/dev/null 2>&1; then
 	COLOR_MAGENTA=$(tput setaf 5 2>/dev/null || echo "")
 	COLOR_CYAN=$(tput setaf 6 2>/dev/null || echo "")
 	COLOR_GRAY=$(tput setaf 8 2>/dev/null || echo "")
+	COLOR_BOLD=$(tput bold 2>/dev/null || echo "")
 	COLOR_RESET=$(tput sgr0 2>/dev/null || echo "")
 else
 	COLOR_RED=""
@@ -22,15 +23,16 @@ else
 	COLOR_MAGENTA=""
 	COLOR_CYAN=""
 	COLOR_GRAY=""
+	COLOR_BOLD=""
 	COLOR_RESET=""
 fi
 
 # Export colors for use in other scripts
-export COLOR_RED COLOR_GREEN COLOR_YELLOW COLOR_BLUE COLOR_MAGENTA COLOR_CYAN COLOR_GRAY COLOR_RESET
+export COLOR_RED COLOR_GREEN COLOR_YELLOW COLOR_BLUE COLOR_MAGENTA COLOR_CYAN COLOR_GRAY COLOR_BOLD COLOR_RESET
 
 # Logging functions
 info() {
-	[[ "${VERBOSE:-false}" == "true" ]] && echo "${COLOR_BLUE}[INFO]:${COLOR_RESET} $*" >&2
+	[[ "${VERBOSE:-false}" == "true" ]] && echo "${COLOR_BLUE}[INFO]${COLOR_RESET} $*" >&2
 }
 
 warn() {
@@ -46,7 +48,7 @@ success() {
 }
 
 env_info() {
-	[[ "${VERBOSE:-false}" == "true" ]] && echo "${COLOR_BLUE}[ENV]:${COLOR_RESET} $*" >&2
+	[[ "${VERBOSE:-false}" == "true" ]] && echo "${COLOR_BLUE}[INFO]${COLOR_RESET}	${COLOR_GREEN}env${COLOR_RESET}	$*" >&2
 }
 
 gray_text() {

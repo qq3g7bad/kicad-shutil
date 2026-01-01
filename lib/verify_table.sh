@@ -3,6 +3,9 @@
 # @IMPL-VERIFY-002@ (FROM: @ARCH-VERIFY-002@)
 # verify_table.sh - Library table verification (sym-lib-table, fp-lib-table)
 
+# Handle Ctrl-C in subshells
+trap 'exit 130' INT TERM
+
 # Global variables for KiCad environment
 declare -A KICAD_ENV
 declare KICAD_ENV_LOADED=""
@@ -72,7 +75,6 @@ verify_table_file() {
 
 		# Skip disabled libraries
 		if echo "$entry" | grep -qE '\(disabled\)'; then
-			[[ "${VERBOSE:-false}" == "true" ]] && info "Skipping disabled library in $table_file"
 			continue
 		fi
 
@@ -107,42 +109,21 @@ verify_table_file() {
 		if [[ "$table_type" == "symbol" ]]; then
 			# Symbol libraries are files
 			if [[ -f "$resolved_uri" ]]; then
-				[[ "${VERBOSE:-false}" == "true" ]] && echo "${COLOR_GREEN}[OK]:${COLOR_RESET}symbol:$lib_name:$(gray_text "$resolved_uri")" >&2
 				((ok++))
 			else
-				echo "${COLOR_RED}[ERROR]:${COLOR_RESET}symbol:$lib_name:File not found:$(gray_text "$resolved_uri")" >&2
+				echo "${COLOR_RED}[ERROR]:${COLOR_RESET}symbol:$lib_name:File not found:$resolved_uri" >&2
 				((missing++))
 			fi
 		else
 			# Footprint libraries are directories (.pretty)
 			if [[ -d "$resolved_uri" ]]; then
-				[[ "${VERBOSE:-false}" == "true" ]] && echo "${COLOR_GREEN}[OK]:${COLOR_RESET}footprint:$lib_name:$(gray_text "$resolved_uri")" >&2
 				((ok++))
 			else
-				echo "${COLOR_RED}[ERROR]:${COLOR_RESET}footprint:$lib_name:Directory not found:$(gray_text "$resolved_uri")" >&2
+				echo "${COLOR_RED}[ERROR]:${COLOR_RESET}footprint:$lib_name:Directory not found:$resolved_uri" >&2
 				((missing++))
 			fi
 		fi
 	done <<<"$entries"
-
-	# Print summary (only in verbose mode)
-	if [[ "${VERBOSE:-false}" == "true" ]]; then
-		local type_name=""
-		if [[ "$table_type" == "symbol" ]]; then
-			type_name="Symbol"
-		else
-			type_name="Footprint"
-		fi
-		echo ""
-		echo "=========================================="
-		echo "$type_name Library Table Verification Summary"
-		echo "=========================================="
-		echo "Total libraries:$total"
-		echo "Found:$ok"
-		echo "Missing:$missing"
-		echo "Unresolved:$unresolved"
-		echo "=========================================="
-	fi
 
 	if [[ $missing -gt 0 || $unresolved -gt 0 ]]; then
 		return 1

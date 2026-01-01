@@ -7,6 +7,9 @@
 #   - sym-lib-table: Symbol library table
 #   - fp-lib-table: Footprint library table
 
+# Handle Ctrl-C in subshells
+trap 'exit 130' INT TERM
+
 # Source verification modules
 VERIFY_TABLE_LOADED="${VERIFY_TABLE_LOADED:-}"
 if [[ -z "$VERIFY_TABLE_LOADED" ]]; then
