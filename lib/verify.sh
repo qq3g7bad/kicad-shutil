@@ -7,8 +7,7 @@
 #   - sym-lib-table: Symbol library table
 #   - fp-lib-table: Footprint library table
 
-# Handle Ctrl-C in subshells
-trap 'exit 130' INT TERM
+# Note: Ctrl-C handling is done in main script
 
 # Source verification modules
 VERIFY_TABLE_LOADED="${VERIFY_TABLE_LOADED:-}"
@@ -24,7 +23,7 @@ if [[ -z "$VERIFY_PROJECT_LOADED" ]]; then
 fi
 
 # Global array to store verification results
-declare -a VERIFY_RESULTS
+declare -a VERIFY_RESULTS=()
 
 # Global statistics (bash 3.2 compatible - no associative arrays)
 VERIFY_STATS_TOTAL_SYMBOLS=0

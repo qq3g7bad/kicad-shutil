@@ -357,7 +357,7 @@ select_from_list() {
 	local i=1
 	for item in "${items[@]}"; do
 		printf "%2d) %s\n" "$i" "$item" >&2
-		((i++))
+		((i++)) || true
 	done
 
 	echo "========================================" >&2
@@ -493,6 +493,7 @@ init_utils() {
 	fi
 
 	# Setup signal handlers to cleanup spinner on interrupt
-	trap cleanup_spinner INT TERM EXIT
+	# Note: EXIT trap removed to avoid issues with subshells in command substitutions
+	trap cleanup_spinner INT TERM
 	return 0
 }

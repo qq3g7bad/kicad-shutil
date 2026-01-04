@@ -3,8 +3,7 @@
 # @IMPL-VERIFY-002@ (FROM: @ARCH-VERIFY-002@)
 # verify_table.sh - Library table verification (sym-lib-table, fp-lib-table)
 
-# Handle Ctrl-C in subshells
-trap 'exit 130' INT TERM
+# Note: Ctrl-C handling is done in main script
 
 # Global variables for KiCad environment (bash 3.2 compatible)
 # Format: "key1|value1\nkey2|value2\n..."
@@ -30,7 +29,7 @@ kicad_env_get() {
 
 # Helper: Count entries in KICAD_ENV
 kicad_env_count() {
-	echo "$KICAD_ENV" | grep -c '^[^[:space:]]' || echo "0"
+	echo "$KICAD_ENV" | grep -c '^[^[:space:]]' || true
 }
 
 # Helper: List all keys in KICAD_ENV
@@ -55,7 +54,7 @@ kicad_unresolved_has() {
 
 # Helper: Count unresolved variables
 kicad_unresolved_count() {
-	echo "$KICAD_UNRESOLVED_VARS" | grep -c '^[^[:space:]]' || echo "0"
+	echo "$KICAD_UNRESOLVED_VARS" | grep -c '^[^[:space:]]' || true
 }
 
 # Helper: List all unresolved variables
@@ -144,11 +143,11 @@ verify_table_file() {
 
 		((total++))
 
-		# Extract library properties using sed (BSD compatible)
+		# Extract library properties using sed (POSIX BRE compatible)
 		local lib_name
-		lib_name=$(echo "$entry" | sed -n 's/.*\(name[[:space:]]*"\([^"]*\)".*/\1/p')
+		lib_name=$(echo "$entry" | sed -n 's/.*(name[[:space:]]*"\([^"]*\)".*/\1/p')
 		local lib_uri
-		lib_uri=$(echo "$entry" | sed -n 's/.*\(uri[[:space:]]*"\([^"]*\)".*/\1/p')
+		lib_uri=$(echo "$entry" | sed -n 's/.*(uri[[:space:]]*"\([^"]*\)".*/\1/p')
 
 		if [[ -z "$lib_uri" ]]; then
 			warn "$lib_name:No URI specified"
