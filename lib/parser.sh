@@ -196,7 +196,7 @@ list_symbols() {
 count_symbols() {
 	local symbols_data="$1"
 
-	echo "$symbols_data" | grep -c "^SYMBOL|" || echo "0"
+	echo "$symbols_data" | grep -c "^SYMBOL|" || true
 }
 
 # @IMPL-PARSER-007@ (FROM: @ARCH-PARSER-001@)

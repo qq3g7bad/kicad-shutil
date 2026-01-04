@@ -44,7 +44,7 @@ process_digikey() {
 			continue
 		fi
 
-		((count++)) || true
+		((count += 1))
 
 		# Check if DigiKey info already exists
 		local existing_dk
@@ -54,7 +54,7 @@ process_digikey() {
 
 		if [[ -n "$existing_dk" ]] && [[ -n "$existing_url" ]]; then
 			info "    [$symbol] DigiKey info already exists, skipping"
-			((skipped++)) || true
+			((skipped += 1))
 			continue
 		fi
 
@@ -63,7 +63,7 @@ process_digikey() {
 		part_name=$(get_property "$symbols_data" "$symbol" "Value")
 		if [[ -z "$part_name" ]]; then
 			warn "    [$symbol] No Value property, skipping"
-			((skipped++)) || true
+			((skipped += 1))
 			continue
 		fi
 
@@ -77,7 +77,7 @@ process_digikey() {
 
 		if [[ -z "$candidates" ]]; then
 			warn "    [$symbol] No DigiKey results found"
-			((skipped++)) || true
+			((skipped += 1))
 			continue
 		fi
 
@@ -105,13 +105,13 @@ process_digikey() {
 			# Add properties
 			if add_digikey_properties "$file" "$symbol" "$dk_part" "$dk_url" "$dk_desc" "$dk_detailed_desc" "$dk_price" "$dk_moq"; then
 				success "    [$symbol] DigiKey info added with pricing"
-				((updated++)) || true
+				((updated += 1))
 			fi
 		else
 			# Multiple matches - interactive selection
 			if [[ "${OPT_AUTO_SKIP:-false}" == "true" ]]; then
 				warn "    [$symbol] Multiple matches, skipping (auto-skip mode)"
-				((skipped++)) || true
+				((skipped += 1))
 				continue
 			fi
 
@@ -120,9 +120,9 @@ process_digikey() {
 			local result=$?
 
 			if [[ $result -eq 0 ]]; then
-				((updated++)) || true
+				((updated += 1))
 			else
-				((skipped++)) || true
+				((skipped += 1))
 			fi
 		fi
 
@@ -606,7 +606,7 @@ delete_digikey_info() {
 			continue
 		fi
 
-		((count++)) || true
+		((count += 1))
 
 		# Check if symbol has any DigiKey properties
 		local has_digikey=false
@@ -627,13 +627,13 @@ delete_digikey_info() {
 		local props_deleted=0
 		for prop in "${digikey_props[@]}"; do
 			if delete_property "$file" "$symbol" "$prop" 2>/dev/null; then
-				((props_deleted++)) || true
+				((props_deleted += 1))
 			fi
 		done
 
 		if [[ $props_deleted -gt 0 ]]; then
 			success "    [$symbol] Deleted $props_deleted DigiKey property(ies)"
-			((deleted++)) || true
+			((deleted += 1))
 		fi
 	done <<<"$symbols"
 

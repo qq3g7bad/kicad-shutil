@@ -54,7 +54,7 @@ download_datasheets() {
 		fi
 
 		download_symbol_datasheet "$file" "$symbols_data" "$symbol" "$output_dir"
-		((count++)) || true
+		((count += 1))
 	done <<<"$symbols"
 
 	info "  Processed $count datasheet(s) for $category"
@@ -67,7 +67,7 @@ download_symbol_datasheet() {
 	local symbol="$3"
 	local output_dir="$4"
 
-	((DATASHEET_STATS_TOTAL++)) || true
+	((DATASHEET_STATS_TOTAL += 1))
 
 	# Get datasheet URL
 	local datasheet
@@ -75,14 +75,14 @@ download_symbol_datasheet() {
 
 	if [[ -z "$datasheet" ]]; then
 		warn "    [$symbol] No datasheet URL"
-		((DATASHEET_STATS_MISSING++)) || true
+		((DATASHEET_STATS_MISSING += 1))
 		return 1
 	fi
 
 	# Skip non-HTTP URLs
 	if [[ ! "$datasheet" =~ ^https?:// ]]; then
 		info "    [$symbol] Skipping non-HTTP URL: $datasheet"
-		((DATASHEET_STATS_SKIPPED++)) || true
+		((DATASHEET_STATS_SKIPPED += 1))
 		return 0
 	fi
 
@@ -97,7 +97,7 @@ download_symbol_datasheet() {
 	# Check if already downloaded
 	if [[ -f "$output_file" ]]; then
 		info "    [$symbol] Already exists, skipping"
-		((DATASHEET_STATS_SKIPPED++)) || true
+		((DATASHEET_STATS_SKIPPED += 1))
 		return 0
 	fi
 
@@ -106,12 +106,12 @@ download_symbol_datasheet() {
 	if download_file "$datasheet" "$output_file" 3; then
 		stop_spinner
 		success "    [$symbol] Downloaded successfully"
-		((DATASHEET_STATS_SUCCESS++)) || true
+		((DATASHEET_STATS_SUCCESS += 1))
 		return 0
 	else
 		stop_spinner
 		error "    [$symbol] Download failed: $datasheet"
-		((DATASHEET_STATS_FAILED++)) || true
+		((DATASHEET_STATS_FAILED += 1))
 		return 1
 	fi
 }

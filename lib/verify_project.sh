@@ -3,8 +3,7 @@
 # @IMPL-VERIFY-003@ (FROM: @ARCH-VERIFY-003@)
 # verify_project.sh - Verification module for KiCad project files
 
-# Handle Ctrl-C in subshells
-trap 'exit 130' INT TERM
+# Note: Ctrl-C handling is done in main script
 
 # Source project parser
 PARSER_PROJECT_LOADED="${PARSER_PROJECT_LOADED:-}"
@@ -104,9 +103,9 @@ verify_project_file() {
 	local symbols_broken_datasheet=0
 
 	if [[ -f "$sym_table" ]]; then
-		((tables_found++))
+		((tables_found += 1))
 		if verify_table_file "$sym_table" "symbol"; then
-			((tables_verified++))
+			((tables_verified += 1))
 		fi
 
 		# Deep verification: check symbols in each library
@@ -114,12 +113,12 @@ verify_project_file() {
 		local sym_lib_stats
 		sym_lib_stats=$(verify_symbol_libraries "$sym_table" "$project_dir" "$fp_table")
 		if [[ -n "$sym_lib_stats" ]]; then
-			total_sym_libs=$(echo "$sym_lib_stats" | grep "^LIBS|" | cut -d'|' -f2)
-			total_symbols=$(echo "$sym_lib_stats" | grep "^SYMBOLS|" | cut -d'|' -f2)
-			symbols_missing_footprint=$(echo "$sym_lib_stats" | grep "^MISSING_FP|" | cut -d'|' -f2)
-			symbols_footprint_not_found=$(echo "$sym_lib_stats" | grep "^FP_NOT_FOUND|" | cut -d'|' -f2)
-			symbols_missing_datasheet=$(echo "$sym_lib_stats" | grep "^MISSING_DS|" | cut -d'|' -f2)
-			symbols_broken_datasheet=$(echo "$sym_lib_stats" | grep "^BROKEN_DS|" | cut -d'|' -f2)
+			total_sym_libs=$(echo "$sym_lib_stats" | grep "^LIBS|" | cut -d'|' -f2 || echo "0")
+			total_symbols=$(echo "$sym_lib_stats" | grep "^SYMBOLS|" | cut -d'|' -f2 || echo "0")
+			symbols_missing_footprint=$(echo "$sym_lib_stats" | grep "^MISSING_FP|" | cut -d'|' -f2 || echo "0")
+			symbols_footprint_not_found=$(echo "$sym_lib_stats" | grep "^FP_NOT_FOUND|" | cut -d'|' -f2 || echo "0")
+			symbols_missing_datasheet=$(echo "$sym_lib_stats" | grep "^MISSING_DS|" | cut -d'|' -f2 || echo "0")
+			symbols_broken_datasheet=$(echo "$sym_lib_stats" | grep "^BROKEN_DS|" | cut -d'|' -f2 || echo "0")
 		fi
 	else
 		warn "Symbol library table not found:sym-lib-table"
@@ -128,9 +127,9 @@ verify_project_file() {
 	fi
 
 	if [[ -f "$fp_table" ]]; then
-		((tables_found++))
+		((tables_found += 1))
 		if verify_table_file "$fp_table" "footprint"; then
-			((tables_verified++))
+			((tables_verified += 1))
 		fi
 
 		# Deep verification: check footprints in each library
@@ -138,10 +137,10 @@ verify_project_file() {
 		local fp_lib_stats
 		fp_lib_stats=$(verify_footprint_libraries "$fp_table" "$project_dir")
 		if [[ -n "$fp_lib_stats" ]]; then
-			total_fp_libs=$(echo "$fp_lib_stats" | grep "^LIBS|" | cut -d'|' -f2)
-			total_footprints=$(echo "$fp_lib_stats" | grep "^FOOTPRINTS|" | cut -d'|' -f2)
-			footprints_missing_3d=$(echo "$fp_lib_stats" | grep "^MISSING_3D|" | cut -d'|' -f2)
-			footprints_3d_not_found=$(echo "$fp_lib_stats" | grep "^3D_NOT_FOUND|" | cut -d'|' -f2)
+			total_fp_libs=$(echo "$fp_lib_stats" | grep "^LIBS|" | cut -d'|' -f2 || echo "0")
+			total_footprints=$(echo "$fp_lib_stats" | grep "^FOOTPRINTS|" | cut -d'|' -f2 || echo "0")
+			footprints_missing_3d=$(echo "$fp_lib_stats" | grep "^MISSING_3D|" | cut -d'|' -f2 || echo "0")
+			footprints_3d_not_found=$(echo "$fp_lib_stats" | grep "^3D_NOT_FOUND|" | cut -d'|' -f2 || echo "0")
 		fi
 	else
 		warn "Footprint library table not found:fp-lib-table"
@@ -149,8 +148,18 @@ verify_project_file() {
 		echo ""
 	fi
 
-	# Summary (only in verbose mode)
-	if [[ "${VERBOSE:-false}" == "true" ]]; then
+	# Summary: show if verbose mode OR if there are any errors/warnings
+	local has_issues=false
+	if [[ $symbols_missing_footprint -gt 0 ]] \
+		|| [[ $symbols_footprint_not_found -gt 0 ]] \
+		|| [[ $symbols_missing_datasheet -gt 0 ]] \
+		|| [[ $symbols_broken_datasheet -gt 0 ]] \
+		|| [[ $footprints_missing_3d -gt 0 ]] \
+		|| [[ $footprints_3d_not_found -gt 0 ]]; then
+		has_issues=true
+	fi
+
+	if [[ "${VERBOSE:-false}" == "true" ]] || [[ "$has_issues" == "true" ]]; then
 		echo "=========================================="
 		echo "${COLOR_BOLD}Project Verification Summary${COLOR_RESET}"
 		echo "=========================================="
@@ -265,9 +274,9 @@ verify_symbol_libraries() {
 			fi
 
 			local lib_name
-			lib_name=$(echo "$entry" | sed -n 's/.*\(name[[:space:]]*"\([^"]*\)".*/\2/p')
+			lib_name=$(echo "$entry" | sed -n 's/.*(name[[:space:]]*"\([^"]*\)".*/\1/p')
 			local lib_uri
-			lib_uri=$(echo "$entry" | sed -n 's/.*\(uri[[:space:]]*"\([^"]*\)".*/\2/p')
+			lib_uri=$(echo "$entry" | sed -n 's/.*(uri[[:space:]]*"\([^"]*\)".*/\1/p')
 
 			if [[ -z "$lib_uri" ]]; then
 				continue
@@ -331,9 +340,9 @@ verify_symbol_libraries() {
 		fi
 
 		local lib_name
-		lib_name=$(echo "$entry" | sed -n 's/.*\(name[[:space:]]*"\([^"]*\)".*/\2/p')
+		lib_name=$(echo "$entry" | sed -n 's/.*(name[[:space:]]*"\([^"]*\)".*/\1/p')
 		local lib_uri
-		lib_uri=$(echo "$entry" | sed -n 's/.*\(uri[[:space:]]*"\([^"]*\)".*/\2/p')
+		lib_uri=$(echo "$entry" | sed -n 's/.*(uri[[:space:]]*"\([^"]*\)".*/\1/p')
 
 		if [[ -z "$lib_uri" ]]; then
 			continue
@@ -346,7 +355,7 @@ verify_symbol_libraries() {
 			continue
 		fi
 
-		((total_libs++))
+		((total_libs += 1))
 		[[ "${VERBOSE:-false}" == "true" ]] && echo "${COLOR_BLUE}[INFO]${COLOR_RESET}	${COLOR_CYAN}sym-lib${COLOR_RESET}	Checking library: $lib_name" >&2
 
 		# Parse symbol file
@@ -363,20 +372,20 @@ verify_symbol_libraries() {
 				continue
 			fi
 
-			((total_symbols++))
+			((total_symbols += 1))
 
 			# Check footprint
 			local footprint
 			footprint=$(get_property "$symbols_data" "$symbol" "Footprint")
 			if [[ -z "$footprint" || "$footprint" == "" ]]; then
-				((missing_footprint++))
+				((missing_footprint += 1))
 				echo "${COLOR_YELLOW}[WARN]${COLOR_RESET}	${COLOR_CYAN}sym-lib${COLOR_RESET}	$lib_name	$symbol	MISSING_FOOTPRINT_FIELD" >&2
 			else
 				# Verify footprint file exists
 				# Footprint format: "LibraryName:FootprintName"
 				if local_fp_map_has_entries; then
 					if [[ -z "$(local_fp_map_get "$footprint")" ]]; then
-						((footprint_not_found++))
+						((footprint_not_found += 1))
 						if [[ "${VERBOSE:-false}" == "true" ]]; then
 							echo "${COLOR_RED}[ERROR]${COLOR_RESET}	${COLOR_CYAN}sym-lib${COLOR_RESET}	$lib_name	$symbol	FOOTPRINT_NOT_FOUND	$footprint" >&2
 						else
@@ -390,7 +399,7 @@ verify_symbol_libraries() {
 			local datasheet
 			datasheet=$(get_property "$symbols_data" "$symbol" "Datasheet")
 			if [[ -z "$datasheet" || "$datasheet" == "" ]]; then
-				((missing_datasheet++))
+				((missing_datasheet += 1))
 				echo "${COLOR_YELLOW}[WARN]${COLOR_RESET}	${COLOR_CYAN}sym-lib${COLOR_RESET}	$lib_name	$symbol	MISSING_DATASHEET_FIELD" >&2
 			else
 				# Validate datasheet URL if it's HTTP(S) and DEEP mode is enabled
@@ -399,7 +408,7 @@ verify_symbol_libraries() {
 					local ds_status
 					ds_status=$(validate_datasheet_url "$datasheet")
 					if [[ "$ds_status" == "BROKEN" ]]; then
-						((broken_datasheet++))
+						((broken_datasheet += 1))
 						echo "${COLOR_RED}[ERROR]${COLOR_RESET}	${COLOR_CYAN}sym-lib${COLOR_RESET}	$lib_name	$symbol	BROKEN_DATASHEET_URL	$datasheet" >&2
 					fi
 				fi
@@ -465,9 +474,9 @@ verify_footprint_libraries() {
 		fi
 
 		local lib_name
-		lib_name=$(echo "$entry" | sed -n 's/.*\(name[[:space:]]*"\([^"]*\)".*/\2/p')
+		lib_name=$(echo "$entry" | sed -n 's/.*(name[[:space:]]*"\([^"]*\)".*/\1/p')
 		local lib_uri
-		lib_uri=$(echo "$entry" | sed -n 's/.*\(uri[[:space:]]*"\([^"]*\)".*/\2/p')
+		lib_uri=$(echo "$entry" | sed -n 's/.*(uri[[:space:]]*"\([^"]*\)".*/\1/p')
 
 		if [[ -z "$lib_uri" ]]; then
 			continue
@@ -480,7 +489,7 @@ verify_footprint_libraries() {
 			continue
 		fi
 
-		((total_libs++))
+		((total_libs += 1))
 		[[ "${VERBOSE:-false}" == "true" ]] && echo "${COLOR_BLUE}[INFO]${COLOR_RESET}	${COLOR_MAGENTA}fp-lib${COLOR_RESET}	Checking library: $lib_name" >&2
 
 		# Find all .kicad_mod files in the library directory
@@ -492,7 +501,7 @@ verify_footprint_libraries() {
 				continue
 			fi
 
-			((total_footprints++))
+			((total_footprints += 1))
 
 			# Parse footprint file
 			local footprint_data
@@ -508,7 +517,7 @@ verify_footprint_libraries() {
 			local model_count
 			model_count=$(count_models "$footprint_data")
 			if [[ $model_count -eq 0 ]]; then
-				((missing_3d++))
+				((missing_3d += 1))
 				echo "${COLOR_YELLOW}[WARN]${COLOR_RESET}	${COLOR_MAGENTA}fp-lib${COLOR_RESET}	$lib_name	$fp_name	NO_3D_MODEL_FIELD" >&2
 			else
 				# Verify each 3D model file exists
@@ -523,14 +532,14 @@ verify_footprint_libraries() {
 					local resolved_model
 					resolved_model=$(resolve_kicad_path "$model_path" "fp-lib")
 					if [[ -z "$resolved_model" ]]; then
-						((model_not_found++))
+						((model_not_found += 1))
 						if [[ "${VERBOSE:-false}" == "true" ]]; then
 							echo "${COLOR_RED}[ERROR]${COLOR_RESET}	${COLOR_MAGENTA}fp-lib${COLOR_RESET}	$lib_name	$fp_name	CANNOT_RESOLVE_3D_MODEL_PATH	$model_path" >&2
 						else
 							echo "${COLOR_RED}[ERROR]${COLOR_RESET}	${COLOR_MAGENTA}fp-lib${COLOR_RESET}	$lib_name	$fp_name	CANNOT_RESOLVE_3D_MODEL_PATH" >&2
 						fi
 					elif [[ ! -f "$resolved_model" ]]; then
-						((model_not_found++))
+						((model_not_found += 1))
 						# Normalize path for cleaner output
 						resolved_model=$(normalize_path "$resolved_model")
 						if [[ "${VERBOSE:-false}" == "true" ]]; then
