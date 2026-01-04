@@ -103,9 +103,9 @@ verify_project_file() {
 	local symbols_broken_datasheet=0
 
 	if [[ -f "$sym_table" ]]; then
-		((tables_found++)) || true
+		((tables_found += 1))
 		if verify_table_file "$sym_table" "symbol"; then
-			((tables_verified++)) || true
+			((tables_verified += 1))
 		fi
 
 		# Deep verification: check symbols in each library
@@ -127,9 +127,9 @@ verify_project_file() {
 	fi
 
 	if [[ -f "$fp_table" ]]; then
-		((tables_found++)) || true
+		((tables_found += 1))
 		if verify_table_file "$fp_table" "footprint"; then
-			((tables_verified++)) || true
+			((tables_verified += 1))
 		fi
 
 		# Deep verification: check footprints in each library
@@ -355,7 +355,7 @@ verify_symbol_libraries() {
 			continue
 		fi
 
-		((total_libs++)) || true
+		((total_libs += 1))
 		[[ "${VERBOSE:-false}" == "true" ]] && echo "${COLOR_BLUE}[INFO]${COLOR_RESET}	${COLOR_CYAN}sym-lib${COLOR_RESET}	Checking library: $lib_name" >&2
 
 		# Parse symbol file
@@ -372,20 +372,20 @@ verify_symbol_libraries() {
 				continue
 			fi
 
-			((total_symbols++)) || true
+			((total_symbols += 1))
 
 			# Check footprint
 			local footprint
 			footprint=$(get_property "$symbols_data" "$symbol" "Footprint")
 			if [[ -z "$footprint" || "$footprint" == "" ]]; then
-				((missing_footprint++)) || true
+				((missing_footprint += 1))
 				echo "${COLOR_YELLOW}[WARN]${COLOR_RESET}	${COLOR_CYAN}sym-lib${COLOR_RESET}	$lib_name	$symbol	MISSING_FOOTPRINT_FIELD" >&2
 			else
 				# Verify footprint file exists
 				# Footprint format: "LibraryName:FootprintName"
 				if local_fp_map_has_entries; then
 					if [[ -z "$(local_fp_map_get "$footprint")" ]]; then
-						((footprint_not_found++)) || true
+						((footprint_not_found += 1))
 						if [[ "${VERBOSE:-false}" == "true" ]]; then
 							echo "${COLOR_RED}[ERROR]${COLOR_RESET}	${COLOR_CYAN}sym-lib${COLOR_RESET}	$lib_name	$symbol	FOOTPRINT_NOT_FOUND	$footprint" >&2
 						else
@@ -399,7 +399,7 @@ verify_symbol_libraries() {
 			local datasheet
 			datasheet=$(get_property "$symbols_data" "$symbol" "Datasheet")
 			if [[ -z "$datasheet" || "$datasheet" == "" ]]; then
-				((missing_datasheet++)) || true
+				((missing_datasheet += 1))
 				echo "${COLOR_YELLOW}[WARN]${COLOR_RESET}	${COLOR_CYAN}sym-lib${COLOR_RESET}	$lib_name	$symbol	MISSING_DATASHEET_FIELD" >&2
 			else
 				# Validate datasheet URL if it's HTTP(S) and DEEP mode is enabled
@@ -408,7 +408,7 @@ verify_symbol_libraries() {
 					local ds_status
 					ds_status=$(validate_datasheet_url "$datasheet")
 					if [[ "$ds_status" == "BROKEN" ]]; then
-						((broken_datasheet++)) || true
+						((broken_datasheet += 1))
 						echo "${COLOR_RED}[ERROR]${COLOR_RESET}	${COLOR_CYAN}sym-lib${COLOR_RESET}	$lib_name	$symbol	BROKEN_DATASHEET_URL	$datasheet" >&2
 					fi
 				fi
@@ -489,7 +489,7 @@ verify_footprint_libraries() {
 			continue
 		fi
 
-		((total_libs++)) || true
+		((total_libs += 1))
 		[[ "${VERBOSE:-false}" == "true" ]] && echo "${COLOR_BLUE}[INFO]${COLOR_RESET}	${COLOR_MAGENTA}fp-lib${COLOR_RESET}	Checking library: $lib_name" >&2
 
 		# Find all .kicad_mod files in the library directory
@@ -501,7 +501,7 @@ verify_footprint_libraries() {
 				continue
 			fi
 
-			((total_footprints++)) || true
+			((total_footprints += 1))
 
 			# Parse footprint file
 			local footprint_data
@@ -517,7 +517,7 @@ verify_footprint_libraries() {
 			local model_count
 			model_count=$(count_models "$footprint_data")
 			if [[ $model_count -eq 0 ]]; then
-				((missing_3d++)) || true
+				((missing_3d += 1))
 				echo "${COLOR_YELLOW}[WARN]${COLOR_RESET}	${COLOR_MAGENTA}fp-lib${COLOR_RESET}	$lib_name	$fp_name	NO_3D_MODEL_FIELD" >&2
 			else
 				# Verify each 3D model file exists
@@ -532,14 +532,14 @@ verify_footprint_libraries() {
 					local resolved_model
 					resolved_model=$(resolve_kicad_path "$model_path" "fp-lib")
 					if [[ -z "$resolved_model" ]]; then
-						((model_not_found++)) || true
+						((model_not_found += 1))
 						if [[ "${VERBOSE:-false}" == "true" ]]; then
 							echo "${COLOR_RED}[ERROR]${COLOR_RESET}	${COLOR_MAGENTA}fp-lib${COLOR_RESET}	$lib_name	$fp_name	CANNOT_RESOLVE_3D_MODEL_PATH	$model_path" >&2
 						else
 							echo "${COLOR_RED}[ERROR]${COLOR_RESET}	${COLOR_MAGENTA}fp-lib${COLOR_RESET}	$lib_name	$fp_name	CANNOT_RESOLVE_3D_MODEL_PATH" >&2
 						fi
 					elif [[ ! -f "$resolved_model" ]]; then
-						((model_not_found++)) || true
+						((model_not_found += 1))
 						# Normalize path for cleaner output
 						resolved_model=$(normalize_path "$resolved_model")
 						if [[ "${VERBOSE:-false}" == "true" ]]; then

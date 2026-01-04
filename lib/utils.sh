@@ -357,7 +357,7 @@ select_from_list() {
 	local i=1
 	for item in "${items[@]}"; do
 		printf "%2d) %s\n" "$i" "$item" >&2
-		((i++)) || true
+		((i += 1))
 	done
 
 	echo "========================================" >&2

@@ -125,7 +125,7 @@ verify_symbol() {
 	local filename
 	filename=$(basename "$file")
 
-	((VERIFY_STATS_TOTAL_SYMBOLS++)) || true
+	((VERIFY_STATS_TOTAL_SYMBOLS += 1))
 
 	local issues=()
 
@@ -144,7 +144,7 @@ verify_symbol() {
 	# Check 1: Footprint exists and is not empty
 	if [[ -z "$footprint" ]]; then
 		issues+=("MISSING_FOOTPRINT|")
-		((VERIFY_STATS_MISSING_FOOTPRINT++)) || true
+		((VERIFY_STATS_MISSING_FOOTPRINT += 1))
 	elif [[ "$footprint" == "" ]]; then
 		issues+=("EMPTY_FOOTPRINT|")
 	fi
@@ -152,7 +152,7 @@ verify_symbol() {
 	# Check 2: Datasheet URL validation
 	if [[ -z "$datasheet" ]]; then
 		issues+=("MISSING_DATASHEET|")
-		((VERIFY_STATS_MISSING_DATASHEET++)) || true
+		((VERIFY_STATS_MISSING_DATASHEET += 1))
 	elif [[ "$datasheet" == "" ]]; then
 		issues+=("EMPTY_DATASHEET|")
 	else
@@ -177,7 +177,7 @@ verify_symbol() {
 
 		if [[ "$ds_status" == "BROKEN" ]]; then
 			issues+=("DATASHEET_BROKEN|$datasheet")
-			((VERIFY_STATS_BROKEN_DATASHEET++)) || true
+			((VERIFY_STATS_BROKEN_DATASHEET += 1))
 		elif [[ "$ds_status" != "OK" ]]; then
 			issues+=("DATASHEET_$ds_status|$datasheet")
 		fi
@@ -195,7 +195,7 @@ verify_symbol() {
 
 	# Check 5: DigiKey (optional, for statistics)
 	if [[ -z "$digikey" ]]; then
-		((VERIFY_STATS_MISSING_DIGIKEY++)) || true
+		((VERIFY_STATS_MISSING_DIGIKEY += 1))
 	fi
 
 	# Store result
@@ -206,11 +206,11 @@ verify_symbol() {
 			echo "${issues[*]}"
 		)
 		VERIFY_RESULTS+=("$filename|$symbol|ISSUES|$issues_str")
-		((VERIFY_STATS_ISSUE_SYMBOLS++)) || true
+		((VERIFY_STATS_ISSUE_SYMBOLS += 1))
 		return 1
 	else
 		VERIFY_RESULTS+=("$filename|$symbol|OK|")
-		((VERIFY_STATS_OK_SYMBOLS++)) || true
+		((VERIFY_STATS_OK_SYMBOLS += 1))
 		return 0
 	fi
 }

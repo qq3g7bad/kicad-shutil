@@ -33,7 +33,7 @@ parse_file() {
     }
 
     # Detect main symbol start: (symbol "NAME" where NAME doesnt match _N_M pattern
-    /^\s*\(symbol "[^"]+"/ {
+    /^[[:space:]]*\(symbol "[^"]+"/ {
         # Extract the candidate symbol name (BSD awk compatible)
         candidate_name = ""
         pos = match($0, /"[^"]+"/)
@@ -60,7 +60,7 @@ parse_file() {
     }
 
     # Track properties while in main symbol (before nested symbols)
-    in_symbol && !property_section_done && /^\s*\(property "[^"]+"/ {
+    in_symbol && !property_section_done && /^[[:space:]]*\(property "[^"]+"/ {
         in_property = 1
         property_depth = 0
 
