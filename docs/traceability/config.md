@@ -37,3 +37,11 @@
   * **TAG FORMAT**: `@TEST-[A-Z0-9-]+@`
   * **TAG LINE FORMAT**: `#.*`
   * **BRIEF**: "Unit test files using shunit2 framework"
+
+## CI Tests
+
+* **PATH**: "../../.github/workflows/"
+  * **EXTENSION FILTER**: "*.yml"
+  * **TAG FORMAT**: `@CI-[A-Z0-9-]+@`
+  * **TAG LINE FORMAT**: `#.*`
+  * **BRIEF**: "GitHub Actions CI/CD workflows for cross-platform testing and quality checks"
