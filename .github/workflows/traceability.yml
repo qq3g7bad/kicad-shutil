@@ -1,0 +1,65 @@
+# ============================================
+# GitHub Actions Workflow for Traceability Matrix Generation
+# ============================================
+# This workflow automatically generates and commits the traceability HTML report
+# whenever changes are pushed to the develop branch or when manually triggered.
+
+name: Generate Traceability Matrix
+
+# Trigger conditions
+on:
+  push:
+    branches:
+      - develop     # On push to develop branch
+  pull_request:
+    branches:
+      - develop     # On PR to develop branch
+  workflow_dispatch: # Allow manual trigger from Actions tab
+
+# Permissions needed for committing
+permissions:
+  contents: write
+
+# Job definitions
+jobs:
+  generate-traceability:
+    name: Generate and commit traceability HTML
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Check out the repository code with submodules
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # Fetch submodules recursively (for shtracer)
+          submodules: recursive
+
+      # Step 2: Generate traceability HTML report
+      - name: Generate traceability matrix
+        run: |
+          echo "Generating traceability HTML report..."
+          cd docs/traceability
+          ./run_shtracer.sh
+          echo "Traceability report generated successfully"
+
+      # Step 3: Check if there are changes to commit
+      - name: Check for changes
+        id: check_changes
+        run: |
+          if git diff --quiet docs/traceability/traceability.html; then
+            echo "No changes detected in traceability.html"
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          else
+            echo "Changes detected in traceability.html"
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          fi
+
+      # Step 4: Commit and push changes (only if changes detected)
+      - name: Commit traceability report
+        if: steps.check_changes.outputs.has_changes == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/traceability/traceability.html
+          git commit -m "chore: update traceability matrix [skip ci]"
+          git push
