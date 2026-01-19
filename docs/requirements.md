@@ -1,6 +1,7 @@
 # Requirements Specification
 
 ## Table of Contents
+
 - [1. Project Verification](#1-project-verification)
 - [2. Symbol Library Management](#2-symbol-library-management)
 - [3. File Operations](#3-file-operations)
@@ -9,26 +10,15 @@
 - [6. Quality Assurance](#6-quality-assurance)
 - [7. Future Requirements](#7-future-requirements)
 
-## Requirements Summary
-
-| Category | Count | Status |
-|----------|-------|--------|
-| Project Verification | 4 | ✅ Implemented |
-| Symbol Library Management | 4 | ✅ Implemented |
-| File Operations | 4 | ✅ Implemented |
-| Cross-Platform Compatibility | 2 | ✅ Implemented |
-| Command-Line Interface | 3 | ✅ Implemented |
-| Quality Assurance | 2 | ✅ Implemented |
-| Future Requirements | 1 | 🔄 Planned |
-| **Total** | **20** | **95% Complete** |
-
 ## 1. Project Verification
 
 <!-- @REQ-PROJ-001@ -->
 ### Project File Validation
+
 The system shall validate KiCad project files (`.kicad_pro`) and their associated library tables (`sym-lib-table`, `fp-lib-table`).
 
 **Acceptance Criteria:**
+
 - Parse JSON format of `.kicad_pro` files
 - Extract project directory (KIPRJMOD)
 - Extract text variables and environment variables
@@ -37,9 +27,11 @@ The system shall validate KiCad project files (`.kicad_pro`) and their associate
 
 <!-- @REQ-PROJ-002@ -->
 ### Deep Symbol Library Verification
+
 The system shall perform deep verification of all symbol libraries referenced in the project.
 
 **Acceptance Criteria:**
+
 - Resolve environment variables in library paths (KIPRJMOD, KICAD7_SYMBOL_DIR, etc.)
 - Parse all `.kicad_sym` files in each library
 - Check each symbol for:
@@ -49,9 +41,11 @@ The system shall perform deep verification of all symbol libraries referenced in
 
 <!-- @REQ-PROJ-003@ -->
 ### Deep Footprint Library Verification
+
 The system shall perform deep verification of all footprint libraries referenced in the project.
 
 **Acceptance Criteria:**
+
 - Resolve environment variables in library paths
 - Parse all `.kicad_mod` files in each library
 - Check each footprint for:
@@ -61,9 +55,11 @@ The system shall perform deep verification of all footprint libraries referenced
 
 <!-- @REQ-PROJ-004@ -->
 ### Verification Reporting
+
 The system shall provide comprehensive verification reports with statistics.
 
 **Acceptance Criteria:**
+
 - Count total libraries, symbols, and footprints
 - Report missing footprints, datasheets, and 3D models
 - Display errors and warnings with appropriate severity levels
@@ -72,12 +68,14 @@ The system shall provide comprehensive verification reports with statistics.
 **Output Format Examples:**
 
 Default mode (errors only):
+
 ```
 [ERROR] sym-lib CustomLib FILE_NOT_FOUND
 [WARN] fp-lib Resistor_SMD R_0603 MISSING_3D_MODEL
 ```
 
 Verbose mode (with details):
+
 ```
 [INFO] Verifying symbol library table: sym-lib-table
 [OK] sym-lib Power_Management: /usr/share/kicad/symbols/Power_Management.kicad_sym
@@ -88,9 +86,11 @@ Verbose mode (with details):
 
 <!-- @REQ-SYM-001@ -->
 ### Symbol Library Verification
+
 The system shall verify individual symbol library files (`.kicad_sym`).
 
 **Acceptance Criteria:**
+
 - Parse S-expression format
 - Extract symbol metadata and properties
 - Validate footprint and datasheet fields
@@ -98,9 +98,11 @@ The system shall verify individual symbol library files (`.kicad_sym`).
 
 <!-- @REQ-SYM-002@ -->
 ### DigiKey Integration
+
 The system shall integrate with DigiKey API to add/update part information.
 
 **Acceptance Criteria:**
+
 - OAuth2 authentication with DigiKey API
 - Search for parts by manufacturer and part number
 - Interactive selection when multiple matches found
@@ -109,18 +111,22 @@ The system shall integrate with DigiKey API to add/update part information.
 
 <!-- @REQ-SYM-003@ -->
 ### DigiKey Metadata Removal
+
 The system shall remove DigiKey metadata from symbol libraries.
 
 **Acceptance Criteria:**
+
 - Delete DigiKey and "DigiKey URL" properties
 - Preserve other symbol properties
 - Create automatic backups before modification
 
 <!-- @REQ-SYM-004@ -->
 ### Datasheet Download
+
 The system shall download datasheets for all symbols in a library.
 
 **Acceptance Criteria:**
+
 - Extract datasheet URLs from symbol properties
 - Download PDF files with retry logic
 - Organize downloads by category/library name
@@ -131,9 +137,11 @@ The system shall download datasheets for all symbols in a library.
 
 <!-- @REQ-FILE-001@ -->
 ### S-Expression Parser
+
 The system shall parse KiCad S-expression format files.
 
 **Acceptance Criteria:**
+
 - Parse `.kicad_sym` files (symbol libraries)
 - Parse `.kicad_mod` files (footprint definitions)
 - Parse library table files (sym-lib-table, fp-lib-table)
@@ -142,9 +150,11 @@ The system shall parse KiCad S-expression format files.
 
 <!-- @REQ-FILE-002@ -->
 ### JSON Parser
+
 The system shall parse KiCad JSON format files.
 
 **Acceptance Criteria:**
+
 - Parse `.kicad_pro` files (project configuration)
 - Extract project directory path
 - Extract text variables
@@ -152,9 +162,11 @@ The system shall parse KiCad JSON format files.
 
 <!-- @REQ-FILE-003@ -->
 ### Atomic File Writes
+
 The system shall modify files atomically with automatic backups.
 
 **Acceptance Criteria:**
+
 - Create `.bak` backup files before modification
 - Use temporary files for atomic writes
 - Verify file integrity after modification
@@ -163,9 +175,11 @@ The system shall modify files atomically with automatic backups.
 
 <!-- @REQ-FILE-004@ -->
 ### Property Insertion
+
 The system shall insert and modify properties in symbol files.
 
 **Acceptance Criteria:**
+
 - Add new properties to existing symbols
 - Update existing property values
 - Preserve property formatting and position
@@ -175,13 +189,16 @@ The system shall insert and modify properties in symbol files.
 
 <!-- @REQ-PLAT-001@ -->
 ### POSIX Shell Compliance
+
 The system shall use POSIX-compliant shell constructs where possible.
 
 **Acceptance Criteria:**
+
 - Bash 4.0+ compatibility
 - Work on Linux, macOS, and Windows (Git Bash)
 - Avoid GNU-specific tools where possible
 - Use portable AWK, sed, grep patterns
+- CI matrix tests on Ubuntu (GNU awk) and macOS (BSD awk) verify cross-platform AWK compatibility automatically
 
 **Platform-Specific Notes:**
 
@@ -192,14 +209,17 @@ The system shall use POSIX-compliant shell constructs where possible.
 | Windows | Git Bash 4.0+ | GNU awk | Via Git for Windows |
 
 **Known Limitations:**
+
 - macOS: Default bash 3.2 lacks associative arrays - install bash 4.0+ via Homebrew
 - Windows: Requires Git Bash (included with Git for Windows)
 
 <!-- @REQ-PLAT-002@ -->
 ### Zero External Dependencies
+
 The system shall have no external dependencies beyond standard Unix tools.
 
 **Acceptance Criteria:**
+
 - Only require: bash, curl, awk, sed, grep
 - No Python, Node.js, or other runtime environments
 - No external libraries or packages
@@ -208,9 +228,11 @@ The system shall have no external dependencies beyond standard Unix tools.
 
 <!-- @REQ-CLI-001@ -->
 ### Subcommand Interface
+
 The system shall provide a subcommand-based CLI interface.
 
 **Acceptance Criteria:**
+
 - `project` subcommand for project verification
 - `sym` subcommand for symbol library management
 - Default to project verification when file path provided
@@ -218,9 +240,11 @@ The system shall provide a subcommand-based CLI interface.
 
 <!-- @REQ-CLI-002@ -->
 ### UNIX Philosophy Output
+
 The system shall follow UNIX philosophy for output handling.
 
 **Acceptance Criteria:**
+
 - Silent on success (default mode)
 - Errors and warnings to stderr
 - Info and success messages only in verbose mode
@@ -229,9 +253,11 @@ The system shall follow UNIX philosophy for output handling.
 
 <!-- @REQ-CLI-003@ -->
 ### Batch Processing
+
 The system shall support processing multiple files.
 
 **Acceptance Criteria:**
+
 - Accept multiple file arguments
 - Support glob patterns (*.kicad_sym)
 - Process files sequentially
@@ -241,9 +267,11 @@ The system shall support processing multiple files.
 
 <!-- @REQ-QA-001@ -->
 ### Unit Testing
+
 The system shall have comprehensive unit test coverage.
 
 **Acceptance Criteria:**
+
 - Test framework: shunit2
 - Tests for all library modules
 - Integration tests for end-to-end workflows
@@ -251,22 +279,27 @@ The system shall have comprehensive unit test coverage.
 
 <!-- @REQ-QA-002@ -->
 ### Static Analysis
+
 The system shall pass static analysis checks.
 
 **Acceptance Criteria:**
+
 - ShellCheck compliance
 - No critical or high-severity warnings
 - Configuration via .shellcheckrc
+- ShellCheck runs in CI with zero critical/high-severity warnings enforced
 
 ## 7. Future Requirements
 
 <!-- @REQ-FUTURE-001@ -->
 ### Schematic Verification (Planned)
+
 The system shall support verification of schematic files (`.kicad_sch`).
 
 **Status:** Not yet implemented
 
 **Acceptance Criteria:**
+
 - Parse S-expression format of schematic files
 - Verify component references match symbols in library tables
 - Check that all components have valid footprints
