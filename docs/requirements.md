@@ -6,9 +6,10 @@
 - [2. Symbol Library Management](#2-symbol-library-management)
 - [3. File Operations](#3-file-operations)
 - [4. Cross-Platform Compatibility](#4-cross-platform-compatibility)
-- [5. Command-Line Interface](#5-command-line-interface)
-- [6. Quality Assurance](#6-quality-assurance)
-- [7. Future Requirements](#7-future-requirements)
+- [5. PCB Manufacturing Output](#5-pcb-manufacturing-output)
+- [6. Command-Line Interface](#6-command-line-interface)
+- [7. Quality Assurance](#7-quality-assurance)
+- [8. Future Requirements](#8-future-requirements)
 
 ## 1. Project Verification
 
@@ -224,7 +225,62 @@ The system shall have no external dependencies beyond standard Unix tools.
 - No Python, Node.js, or other runtime environments
 - No external libraries or packages
 
-## 5. Command-Line Interface
+## 5. PCB Manufacturing Output
+
+<!-- @REQ-PCB-001@ -->
+### Manufacturing File Generation
+
+The system shall generate manufacturing output files from KiCad PCB designs using kicad-cli.
+
+**Acceptance Criteria:**
+
+- Generate Gerber files for all PCB layers
+- Generate drill files in Excellon format
+- Generate position (Pick & Place) files in CSV format for front and back sides
+- Generate netlist in KiCad XML format from schematic files
+- Organize output into subdirectories (gerbers/, drill/, position/, netlist/)
+- Default output directory: `manufacturing/` relative to PCB file location
+- Support custom output directory via `--output` flag
+
+<!-- @REQ-PCB-002@ -->
+### Input File Resolution
+
+The system shall accept multiple KiCad file types and automatically resolve related files.
+
+**Acceptance Criteria:**
+
+- Accept `.kicad_pcb` files directly for Gerber/drill/position export
+- Accept `.kicad_pro` files and auto-detect matching PCB and schematic files
+- Accept `.kicad_sch` files and auto-detect matching PCB files
+- Warn when schematic file is not found (skip netlist generation)
+- Error when PCB file is not found (required for manufacturing output)
+
+<!-- @REQ-PCB-003@ -->
+### kicad-cli Dependency Management
+
+The system shall verify kicad-cli availability and version compatibility.
+
+**Acceptance Criteria:**
+
+- Check that kicad-cli is available in PATH
+- Detect kicad-cli version and warn if older than 7.0
+- Provide clear error messages with installation instructions when kicad-cli is not found
+- Continue with best-effort approach when individual export steps fail
+
+<!-- @REQ-PCB-004@ -->
+### Manufacturing Export Reporting
+
+The system shall provide a summary of manufacturing export results.
+
+**Acceptance Criteria:**
+
+- Track success/failure status for each export type (Gerbers, drill, position, netlist)
+- Display summary with per-type status indicators
+- Show output directory path
+- Report total successful and failed exports
+- Return non-zero exit code if any export failed
+
+## 6. Command-Line Interface
 
 <!-- @REQ-CLI-001@ -->
 ### Subcommand Interface
@@ -235,6 +291,7 @@ The system shall provide a subcommand-based CLI interface.
 
 - `project` subcommand for project verification
 - `sym` subcommand for symbol library management
+- `pcb` subcommand for PCB manufacturing output generation
 - Default to project verification when file path provided
 - Clear help messages for each subcommand
 
@@ -263,7 +320,7 @@ The system shall support processing multiple files.
 - Process files sequentially
 - Aggregate statistics across files
 
-## 6. Quality Assurance
+## 7. Quality Assurance
 
 <!-- @REQ-QA-001@ -->
 ### Unit Testing
@@ -289,7 +346,7 @@ The system shall pass static analysis checks.
 - Configuration via .shellcheckrc
 - ShellCheck runs in CI with zero critical/high-severity warnings enforced
 
-## 7. Future Requirements
+## 8. Future Requirements
 
 <!-- @REQ-FUTURE-001@ -->
 ### Schematic Verification (Planned)

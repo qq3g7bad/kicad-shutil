@@ -26,40 +26,28 @@ source "$LIB_DIR/utils.sh"
 # Usage information
 usage() {
 	cat <<EOF
-Usage: kicad-shutil project <file.kicad_pro|directory>
-       kicad-shutil <file.kicad_pro>              # Implicit project command
-       kicad-shutil sym [options] <file.kicad_sym>...
+${COLOR_BOLD}kicad-shutil${COLOR_RESET} - KiCad Project Helper Utilities
 
-KiCad Project Helper Utilities
+${COLOR_BOLD}USAGE${COLOR_RESET}
+  kicad-shutil <command> [flags]
 
-COMMANDS:
-    project          Verify KiCad project and all libraries
-                     Run 'kicad-shutil project --help' for details
+${COLOR_BOLD}CORE COMMANDS${COLOR_RESET}
+  ${COLOR_BOLD}project${COLOR_RESET}    Verify KiCad project and all libraries
+  ${COLOR_BOLD}sym${COLOR_RESET}        Manage symbol library files (.kicad_sym)
+  ${COLOR_BOLD}pcb${COLOR_RESET}        Generate PCB manufacturing output files
 
-    sym              Manage symbol library files (.kicad_sym)
-                     Run 'kicad-shutil sym --help' for details
+${COLOR_BOLD}FLAGS${COLOR_RESET}
+  ${COLOR_CYAN}--verbose${COLOR_RESET}         Show detailed verbose output
+  ${COLOR_CYAN}-h, --help${COLOR_RESET}        Show help for command
+  ${COLOR_CYAN}-v, --version${COLOR_RESET}     Show version information
 
-GLOBAL OPTIONS:
-    --verbose        Show detailed verbose output
-    -h, --help       Show this help message
-    -v, --version    Show version information
+${COLOR_BOLD}EXAMPLES${COLOR_RESET}
+  ${COLOR_GRAY}\$${COLOR_RESET} kicad-shutil project my_project.kicad_pro
+  ${COLOR_GRAY}\$${COLOR_RESET} kicad-shutil my_project.kicad_pro
+  ${COLOR_GRAY}\$${COLOR_RESET} kicad-shutil sym --update-digikey pmic.kicad_sym
+  ${COLOR_GRAY}\$${COLOR_RESET} kicad-shutil pcb gerber-output my_board.kicad_pcb
 
-EXAMPLES:
-    # Verify entire project (explicit)
-    kicad-shutil project my_project.kicad_pro
-    kicad-shutil project ./my_project
-
-    # Verify project (implicit - auto-detect .kicad_pro)
-    kicad-shutil my_project.kicad_pro
-
-    # Verify project with verbose output
-    kicad-shutil --verbose project my_project.kicad_pro
-
-    # Manage symbol libraries
-    kicad-shutil sym pmic.kicad_sym
-    kicad-shutil sym --update-digikey pmic.kicad_sym
-    kicad-shutil sym --download-datasheets pmic.kicad_sym --to ~/datasheets
-
+${COLOR_GRAY}Use 'kicad-shutil <command> --help' for more information about a command.${COLOR_RESET}
 EOF
 	exit 0
 }
@@ -69,32 +57,29 @@ EOF
 usage_project() {
 	local exit_code="${1:-0}"
 	cat <<EOF
-Usage: kicad-shutil project [options] <directory|file.kicad_pro>
-       kicad-shutil <file.kicad_pro>                # Implicit
+${COLOR_BOLD}kicad-shutil project${COLOR_RESET} - Verify KiCad project and all libraries
 
-Verify a KiCad project and all associated libraries.
+${COLOR_BOLD}USAGE${COLOR_RESET}
+  kicad-shutil project [flags] <directory|file.kicad_pro>
+  kicad-shutil <file.kicad_pro>  ${COLOR_GRAY}(implicit project command)${COLOR_RESET}
 
-This command performs comprehensive verification:
-  • Validates project structure and library tables
-  • Checks all symbol libraries for missing footprints and datasheets
-  • Checks all footprint libraries for missing 3D models
-  • Resolves all environment variables (KIPRJMOD, etc.)
+${COLOR_BOLD}DESCRIPTION${COLOR_RESET}
+  Performs comprehensive verification of a KiCad project:
+    ${COLOR_GREEN}•${COLOR_RESET} Validates project structure and library tables
+    ${COLOR_GREEN}•${COLOR_RESET} Checks all symbol libraries for missing footprints and datasheets
+    ${COLOR_GREEN}•${COLOR_RESET} Checks all footprint libraries for missing 3D models
+    ${COLOR_GREEN}•${COLOR_RESET} Resolves all environment variables (KIPRJMOD, etc.)
 
-OPTIONS:
-    --verbose      Show detailed verbose output (INFO, OK, and summary)
-    --deep         Enable deep verification (datasheet URL validation)
-    -h, --help     Show this help message
+${COLOR_BOLD}FLAGS${COLOR_RESET}
+  ${COLOR_CYAN}--verbose${COLOR_RESET}    Show detailed verbose output (INFO, OK, and summary)
+  ${COLOR_CYAN}--deep${COLOR_RESET}       Enable deep verification (datasheet URL validation)
+  ${COLOR_CYAN}-h, --help${COLOR_RESET}   Show help for command
 
-EXAMPLES:
-    # Verify a project (by file)
-    kicad-shutil project my_project.kicad_pro
-    kicad-shutil my_project.kicad_pro              # Implicit
-
-    # Verify a project (by directory)
-    kicad-shutil project ./my_project
-
-    # Verify with verbose output
-    kicad-shutil --verbose project my_project.kicad_pro
+${COLOR_BOLD}EXAMPLES${COLOR_RESET}
+  ${COLOR_GRAY}\$${COLOR_RESET} kicad-shutil project my_project.kicad_pro
+  ${COLOR_GRAY}\$${COLOR_RESET} kicad-shutil my_project.kicad_pro
+  ${COLOR_GRAY}\$${COLOR_RESET} kicad-shutil project ./my_project
+  ${COLOR_GRAY}\$${COLOR_RESET} kicad-shutil --verbose project my_project.kicad_pro
 
 EOF
 	exit "$exit_code"
@@ -105,33 +90,72 @@ EOF
 usage_sym() {
 	local exit_code="${1:-0}"
 	cat <<EOF
-Usage: kicad-shutil sym [options] <file.kicad_sym> [<file2.kicad_sym> ...]
+${COLOR_BOLD}kicad-shutil sym${COLOR_RESET} - Manage KiCad symbol library files
 
-Manage KiCad symbol library files.
+${COLOR_BOLD}USAGE${COLOR_RESET}
+  kicad-shutil sym [flags] <file.kicad_sym> [<file2.kicad_sym> ...]
 
-If no operation is specified, defaults to --verify.
+${COLOR_BOLD}DESCRIPTION${COLOR_RESET}
+  Manage KiCad symbol library files (.kicad_sym).
+  If no operation flag is specified, defaults to ${COLOR_CYAN}--verify${COLOR_RESET}.
 
-OPTIONS:
-    -v, --verify                Validate footprints, datasheets, and show detailed report
-    -u, --update-digikey        Add/update DigiKey part numbers, URLs, and metadata
-    -d, --delete-digikey        Remove all DigiKey metadata from symbols
-    -D, --download-datasheets   Download all datasheets (use --to <dir> to specify directory)
-    -t, --to <dir>              Target directory for datasheet downloads
-    -h, --help                  Show this help message
+${COLOR_BOLD}FLAGS${COLOR_RESET}
+  ${COLOR_CYAN}-v, --verify${COLOR_RESET}               Validate footprints, datasheets, and show report
+  ${COLOR_CYAN}-u, --update-digikey${COLOR_RESET}       Add/update DigiKey part numbers and metadata
+  ${COLOR_CYAN}-d, --delete-digikey${COLOR_RESET}       Remove all DigiKey metadata from symbols
+  ${COLOR_CYAN}-D, --download-datasheets${COLOR_RESET}  Download all datasheets
+  ${COLOR_CYAN}-t, --to${COLOR_RESET} <dir>             Target directory for datasheet downloads
+  ${COLOR_CYAN}-h, --help${COLOR_RESET}                 Show help for command
 
-EXAMPLES:
-    # Verify symbol library (default operation)
-    kicad-shutil sym pmic.kicad_sym
-    kicad-shutil sym --verify pmic.kicad_sym
+${COLOR_BOLD}EXAMPLES${COLOR_RESET}
+  ${COLOR_GRAY}\$${COLOR_RESET} kicad-shutil sym pmic.kicad_sym
+  ${COLOR_GRAY}\$${COLOR_RESET} kicad-shutil sym --verify pmic.kicad_sym
+  ${COLOR_GRAY}\$${COLOR_RESET} kicad-shutil sym --update-digikey pmic.kicad_sym
+  ${COLOR_GRAY}\$${COLOR_RESET} kicad-shutil sym --delete-digikey pmic.kicad_sym
+  ${COLOR_GRAY}\$${COLOR_RESET} kicad-shutil sym --download-datasheets *.kicad_sym --to ~/datasheets
 
-    # Add/update DigiKey info (interactive mode)
-    kicad-shutil sym --update-digikey pmic.kicad_sym
+EOF
+	exit "$exit_code"
+}
 
-    # Remove all DigiKey metadata
-    kicad-shutil sym --delete-digikey pmic.kicad_sym
+# PCB command: generate manufacturing output
+# Usage: usage_pcb [exit_code]
+usage_pcb() {
+	local exit_code="${1:-0}"
+	cat <<EOF
+${COLOR_BOLD}kicad-shutil pcb${COLOR_RESET} - Generate PCB manufacturing output files
 
-    # Download datasheets to specific directory
-    kicad-shutil sym --download-datasheets *.kicad_sym --to ~/datasheets
+${COLOR_BOLD}USAGE${COLOR_RESET}
+  kicad-shutil pcb <operation> [flags] <file>
+
+${COLOR_BOLD}OPERATIONS${COLOR_RESET}
+  ${COLOR_BOLD}gerber-output${COLOR_RESET}  Generate all manufacturing files (Gerbers, drill, position, netlist)
+
+${COLOR_BOLD}FLAGS${COLOR_RESET}
+  ${COLOR_CYAN}--output${COLOR_RESET} <dir>  Output directory ${COLOR_GRAY}(default: ./manufacturing/)${COLOR_RESET}
+  ${COLOR_CYAN}--verbose${COLOR_RESET}       Show detailed verbose output
+  ${COLOR_CYAN}-h, --help${COLOR_RESET}      Show help for command
+
+${COLOR_BOLD}SUPPORTED INPUT FILES${COLOR_RESET}
+  ${COLOR_BOLD}.kicad_pcb${COLOR_RESET}    PCB file (looks for matching .kicad_sch for netlist)
+  ${COLOR_BOLD}.kicad_pro${COLOR_RESET}    Project file (auto-detects PCB and schematic)
+  ${COLOR_BOLD}.kicad_sch${COLOR_RESET}    Schematic file (looks for matching .kicad_pcb)
+
+${COLOR_BOLD}OUTPUT STRUCTURE${COLOR_RESET}
+  manufacturing/
+  ├── gerbers/   All Gerber layers
+  ├── drill/     Drill files (Excellon format)
+  ├── position/  Position files (front.pos, back.pos)
+  └── netlist/   Netlist file (KiCad XML)
+
+${COLOR_BOLD}EXAMPLES${COLOR_RESET}
+  ${COLOR_GRAY}\$${COLOR_RESET} kicad-shutil pcb gerber-output my_board.kicad_pcb
+  ${COLOR_GRAY}\$${COLOR_RESET} kicad-shutil pcb gerber-output my_project.kicad_pro
+  ${COLOR_GRAY}\$${COLOR_RESET} kicad-shutil pcb gerber-output my_board.kicad_pcb --output /tmp/fab
+  ${COLOR_GRAY}\$${COLOR_RESET} kicad-shutil --verbose pcb gerber-output my_board.kicad_pcb
+
+${COLOR_BOLD}REQUIREMENTS${COLOR_RESET}
+  ${COLOR_YELLOW}kicad-cli${COLOR_RESET} (KiCad 7.0 or later) must be installed and available in PATH
 
 EOF
 	exit "$exit_code"
@@ -172,6 +196,12 @@ main() {
 			# Symbol library management
 			shift
 			cmd_sym "$@"
+			return $?
+			;;
+		pcb)
+			# PCB manufacturing output
+			shift
+			cmd_pcb "$@"
 			return $?
 			;;
 		*.kicad_pro)
@@ -467,6 +497,86 @@ process_symbol_file() {
 	if $OPT_DELETE_DIGIKEY; then
 		delete_digikey_info "$file" "$symbols_data"
 	fi
+}
+
+# @IMPL-MAIN-006@ (FROM: @ARCH-MAIN-001@, @ARCH-PCB-001@)
+# PCB command implementation
+cmd_pcb() {
+	local operation=""
+	local output_dir=""
+	local input_file=""
+
+	# Parse arguments
+	while [[ $# -gt 0 ]]; do
+		case "$1" in
+			-h | --help)
+				usage_pcb
+				;;
+			--verbose)
+				export VERBOSE=true
+				shift
+				;;
+			--output)
+				output_dir="$2"
+				shift 2
+				;;
+			-*)
+				error "Unknown option for 'pcb' command: $1"
+				echo "" >&2
+				usage_pcb 2
+				;;
+			*)
+				if [[ -z "$operation" ]]; then
+					operation="$1"
+				elif [[ -z "$input_file" ]]; then
+					input_file="$1"
+				else
+					error "Too many arguments"
+					echo "" >&2
+					usage_pcb 2
+				fi
+				shift
+				;;
+		esac
+	done
+
+	# Validate operation
+	if [[ -z "$operation" ]]; then
+		error "No operation specified"
+		usage_pcb 2
+	fi
+
+	# Validate input file
+	if [[ -z "$input_file" ]]; then
+		error "No input file specified"
+		usage_pcb 2
+	fi
+
+	if [[ ! -f "$input_file" ]]; then
+		error "Input file not found: $input_file"
+		exit 1
+	fi
+
+	# Initialize
+	if ! init_utils; then
+		exit 1
+	fi
+	mkdir -p "$CACHE_DIR"
+
+	# Source PCB export module
+	source "$LIB_DIR/pcb_export.sh"
+
+	# Route to operation
+	case "$operation" in
+		gerber-output)
+			export_gerber_output "$input_file" "$output_dir"
+			;;
+		*)
+			error "Unknown operation: $operation"
+			echo "" >&2
+			usage_pcb 2
+			;;
+	esac
 }
 
 # Run main

@@ -15,6 +15,7 @@
   - [Property Writer (lib/writer.sh)](#property-writer-libwritersh)
   - [DigiKey API Integration (lib/digikey.sh)](#digikey-api-integration-libdigikeysh)
   - [Datasheet Download (lib/datasheet.sh)](#datasheet-download-libdatasheetsh)
+  - [PCB Export (lib/pcb_export.sh)](#pcb-export-libpcb_exportsh)
   - [Utilities (lib/utils.sh)](#utilities-libutilssh)
 - [3. Data Flow](#3-data-flow)
   - [Symbol Library Workflow](#symbol-library-workflow)
@@ -41,6 +42,7 @@
 | writer.sh | Property modification | `insert_property()`, `update_property()` | test_writer.sh |
 | digikey.sh | DigiKey API integration | `process_digikey()`, `search_digikey_part()` | test_digikey.sh |
 | datasheet.sh | Datasheet downloads | `download_datasheets()` | test_datasheet.sh |
+| pcb_export.sh | PCB manufacturing output | `export_gerber_output()`, `export_gerbers()` | test_pcb_export.sh |
 | utils.sh | Shared utilities | `info()`, `error()`, `http_get()` | test_utils.sh |
 
 ## 1. System Architecture
@@ -51,7 +53,7 @@ The main executable routes commands to appropriate subcommand handlers.
 
 **Components:**
 - `main()` - Command-line argument parser and dispatcher
-  - Handles `project` and `sym` subcommands
+  - Handles `project`, `sym`, and `pcb` subcommands
   - Implements implicit routing for `.kicad_pro` files
   - Manages global `--verbose` flag
   - Supports batch processing of multiple files
@@ -59,7 +61,10 @@ The main executable routes commands to appropriate subcommand handlers.
 - `cmd_sym()` - Symbol library management workflow
   - Accepts multiple `.kicad_sym` files for batch processing
   - Aggregates statistics across all files
-- `usage()` / `usage_project()` / `usage_sym()` - Help message generators
+- `cmd_pcb()` - PCB manufacturing output workflow
+  - Routes to `gerber-output` operation
+  - Supports `--output` for custom output directory
+- `usage()` / `usage_project()` / `usage_sym()` / `usage_pcb()` - Help message generators
 
 **Design Decisions:**
 - Subcommand-based interface for extensibility
@@ -96,6 +101,7 @@ graph TB
         WRITER[writer.sh<br/>Property writer]
         DIGIKEY[digikey.sh<br/>API integration]
         DATASHEET[datasheet.sh<br/>Downloads]
+        PCB_EXPORT[pcb_export.sh<br/>Manufacturing output]
     end
 
     subgraph "Utilities"
@@ -113,6 +119,8 @@ graph TB
     MAIN --> WRITER
     MAIN --> DIGIKEY
     MAIN --> DATASHEET
+    MAIN --> PCB_EXPORT
+    PCB_EXPORT --> UTILS
     PARSER --> UTILS
     PARSER_PRJ --> UTILS
     VERIFY --> UTILS
@@ -130,6 +138,7 @@ graph TB
     style WRITER fill:#f3e5f5
     style DIGIKEY fill:#f3e5f5
     style DATASHEET fill:#f3e5f5
+    style PCB_EXPORT fill:#f3e5f5
     style UTILS fill:#e8f5e9
 ```
 
@@ -399,6 +408,67 @@ Batch datasheet downloader with progress tracking.
 - Progress tracking with statistics
 - Organized by category/library name
 
+<!-- @ARCH-PCB-001@ (FROM: @REQ-PCB-001@, @REQ-PCB-002@, @REQ-PCB-003@, @REQ-PCB-004@) -->
+### PCB Export (lib/pcb_export.sh)
+PCB manufacturing output generation wrapping kicad-cli commands.
+
+**Functions:**
+- `export_gerber_output()` - Main entry point for manufacturing output generation
+- `check_kicad_cli()` - Verify kicad-cli availability and version
+- `resolve_input_files()` - Resolve PCB/SCH files from various input formats
+- `export_gerbers()` - Generate Gerber files for all PCB layers
+- `export_drill()` - Generate drill files in Excellon format
+- `export_position()` - Generate Pick & Place position files (front/back CSV)
+- `export_netlist()` - Generate netlist in KiCad XML format
+- `init_pcb_export_stats()` - Initialize export statistics counters
+- `print_pcb_export_summary()` - Display manufacturing export results
+
+**Input Resolution (REQ-PCB-002):**
+- `.kicad_pcb` → uses directly; looks for matching `.kicad_sch`
+- `.kicad_pro` → derives both `.kicad_pcb` and `.kicad_sch` from project base name
+- `.kicad_sch` → looks for matching `.kicad_pcb`
+- Missing schematic: warns and skips netlist generation
+- Missing PCB: returns error (required for manufacturing output)
+
+**Output Structure (REQ-PCB-001):**
+```
+manufacturing/
+├── gerbers/     All Gerber layers
+├── drill/       Drill files (Excellon format)
+├── position/    Position files (front.pos, back.pos)
+└── netlist/     Netlist file (KiCad XML)
+```
+
+**Best-Effort Strategy (REQ-PCB-003):**
+- Each export step runs independently
+- Failures are tracked but do not block subsequent steps
+- Summary shows per-step success/failure status
+
+**Manufacturing Output Workflow:**
+
+```mermaid
+flowchart TD
+    A[User invokes<br/>kicad-shutil pcb gerber-output] --> B[check_kicad_cli<br/>Verify availability]
+    B --> C[resolve_input_files<br/>Determine PCB + SCH paths]
+    C --> D[Create output directory]
+    D --> E[export_gerbers<br/>All PCB layers]
+    E --> F[export_drill<br/>Excellon format]
+    F --> G[export_position<br/>Front + Back CSV]
+    G --> H{SCH_FILE<br/>available?}
+    H -->|Yes| I[export_netlist<br/>KiCad XML]
+    H -->|No| J[Skip netlist]
+    I --> K[print_pcb_export_summary]
+    J --> K
+
+    style B fill:#e1f5ff
+    style C fill:#e1f5ff
+    style E fill:#fff4e6
+    style F fill:#fff4e6
+    style G fill:#fff4e6
+    style I fill:#fff4e6
+    style K fill:#e8f5e9
+```
+
 <!-- @ARCH-UTILS-001@ (FROM: @REQ-PLAT-002@, @REQ-FILE-003@) -->
 ### Utilities (lib/utils.sh)
 Shared utility functions for logging, HTTP, and file operations.
@@ -616,6 +686,7 @@ test/
 ├── test_writer.sh              # writer.sh unit tests
 ├── test_datasheet.sh           # datasheet.sh unit tests
 ├── test_digikey.sh             # digikey.sh unit tests (requires API credentials)
+├── test_pcb_export.sh          # pcb_export.sh unit tests (requires kicad-cli for some tests)
 ├── run_tests.sh                # Test runner
 └── shunit2/                    # Test framework (git submodule)
 ```
@@ -640,6 +711,7 @@ graph LR
         W[writer.sh]
         D[datasheet.sh]
         DK[digikey.sh]
+        PCB[pcb_export.sh]
     end
 
     subgraph "Tests"
@@ -652,6 +724,7 @@ graph LR
         TW[test_writer.sh]
         TD[test_datasheet.sh]
         TDK[test_digikey.sh]
+        TPCB[test_pcb_export.sh]
     end
 
     TP1 -.tests.-> P1
@@ -663,6 +736,7 @@ graph LR
     TW -.tests.-> W
     TD -.tests.-> D
     TDK -.tests.-> DK
+    TPCB -.tests.-> PCB
 
     style P1 fill:#e1f5ff
     style P2 fill:#e1f5ff
@@ -674,6 +748,8 @@ graph LR
     style TP3 fill:#c8e6c9
     style TV1 fill:#c8e6c9
     style TV2 fill:#c8e6c9
+    style PCB fill:#fff4e6
+    style TPCB fill:#c8e6c9
 ```
 
 <!-- @ARCH-TEST-002@ (FROM: @REQ-QA-001@) -->
@@ -686,6 +762,9 @@ test/fixtures/
 ├── sample.kicad_sym            # Sample symbol library
 ├── sample.kicad_pro            # Sample project file
 ├── sample.kicad_mod            # Sample footprint
+├── simple.kicad_pcb            # Simple PCB for manufacturing export tests
+├── simple.kicad_pro            # Simple project for PCB export tests
+├── simple.kicad_sch            # Simple schematic for netlist export tests
 ├── sym-lib-table               # Sample symbol table
 └── fp-lib-table                # Sample footprint table
 ```
