@@ -181,6 +181,41 @@ test_load_kicad_environment_is_idempotent() {
 	assertEquals "$first_call_loaded" "$second_call_loaded"
 }
 
+test_kicad_version_major_extracts_major_part() {
+	local result
+	result=$(kicad_version_major "8.0")
+	assertEquals "8" "$result"
+
+	result=$(kicad_version_major "9")
+	assertEquals "9" "$result"
+}
+
+test_select_kicad_config_file_prefers_requested_version() {
+	local config_root="$FIXTURES_DIR/kicad-config"
+	mkdir -p "$config_root/7.0" "$config_root/8.0"
+	touch "$config_root/7.0/kicad_common.json"
+	touch "$config_root/8.0/kicad_common.json"
+
+	local result
+	result=$(select_kicad_config_file "$config_root" "7.0")
+
+	assertContains "$result" "7.0|"
+	assertContains "$result" "/7.0/kicad_common.json"
+}
+
+test_select_kicad_config_file_falls_back_to_latest_version() {
+	local config_root="$FIXTURES_DIR/kicad-config-latest"
+	mkdir -p "$config_root/7.0" "$config_root/8.0"
+	touch "$config_root/7.0/kicad_common.json"
+	touch "$config_root/8.0/kicad_common.json"
+
+	local result
+	result=$(select_kicad_config_file "$config_root" "9.0")
+
+	assertContains "$result" "8.0|"
+	assertContains "$result" "/8.0/kicad_common.json"
+}
+
 #-----------------------------------
 # Tests for verify_table_file()
 #-----------------------------------
