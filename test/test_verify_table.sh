@@ -162,6 +162,16 @@ test_resolve_kicad_path_with_no_variables() {
 	assertEquals "$path" "$result"
 }
 
+test_resolve_kicad_path_with_legacy_colon_variable_syntax() {
+	export LEGACY_VAR="/legacy/base"
+
+	local path=":LEGACY_VAR:/models/part.step"
+	local result
+	result=$(resolve_kicad_path "$path")
+
+	assertEquals "/legacy/base/models/part.step" "$result"
+}
+
 #-----------------------------------
 # Tests for load_kicad_environment()
 #-----------------------------------
