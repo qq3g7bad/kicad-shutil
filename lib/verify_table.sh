@@ -15,10 +15,22 @@ KICAD_UNRESOLVED_VARS=""
 kicad_env_set() {
 	local key="$1"
 	local value="$2"
-	# Remove existing entry if present
-	KICAD_ENV=$(echo "$KICAD_ENV" | grep -v "^${key}|" || true)
-	# Add new entry
-	KICAD_ENV="${KICAD_ENV}${key}|${value}"$'\n'
+	local line
+	local new_env=""
+
+	# Rebuild map without existing key entry.
+	while IFS= read -r line; do
+		if [[ -z "$line" ]]; then
+			continue
+		fi
+		if [[ "$line" == "${key}|"* ]]; then
+			continue
+		fi
+		new_env="${new_env}${line}"$'\n'
+	done <<<"$KICAD_ENV"
+
+	# Add/replace entry
+	KICAD_ENV="${new_env}${key}|${value}"$'\n'
 }
 
 # Helper: Get value from KICAD_ENV
@@ -212,6 +224,10 @@ resolve_kicad_path() {
 	while [[ $iteration -lt $max_iterations ]]; do
 		((iteration++))
 
+		# Support legacy KiCad path syntax :VAR: in addition to ${VAR}
+		# Handle both :VAR:/foo and :VAR:foo forms.
+		resolved=$(echo "$resolved" | sed -E 's/:([A-Za-z_][A-Za-z0-9_]*):\//${\1}\//g; s/:([A-Za-z_][A-Za-z0-9_]*):([^/])/${\1}\/\2/g')
+
 		# Extract all ${VAR} patterns using awk (BSD compatible)
 		local vars
 		vars=$(echo "$resolved" | awk '{
@@ -281,6 +297,108 @@ resolve_kicad_path() {
 	echo "$resolved"
 }
 
+# Get KiCad config base directory for current platform
+get_kicad_config_base_dir() {
+	if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+		echo "$HOME/.config/kicad"
+	elif [[ "$OSTYPE" == "darwin"* ]]; then
+		echo "$HOME/Library/Preferences/kicad"
+	elif [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" || "$OSTYPE" == "win32" ]]; then
+		echo "$APPDATA/kicad"
+	fi
+}
+
+# Detect KiCad version from kicad-cli output (returns major.minor when possible)
+detect_kicad_cli_version() {
+	if ! command -v kicad-cli >/dev/null 2>&1; then
+		return 0
+	fi
+
+	local raw_version
+	raw_version=$(kicad-cli --version 2>/dev/null | head -1)
+
+	if [[ -z "$raw_version" ]]; then
+		return 0
+	fi
+
+	local version
+	version=$(echo "$raw_version" | grep -Eo '[0-9]+\.[0-9]+' | head -1 || true)
+	if [[ -n "$version" ]]; then
+		echo "$version"
+		return 0
+	fi
+
+	local major
+	major=$(echo "$raw_version" | grep -Eo '[0-9]+' | head -1 || true)
+	if [[ -n "$major" ]]; then
+		echo "${major}.0"
+	fi
+}
+
+# Return major version from a version string (e.g. "8.0" -> "8")
+kicad_version_major() {
+	local version="$1"
+	local major
+	major=$(echo "$version" | sed -n 's/^\([0-9][0-9]*\)\(\.[0-9][0-9]*\)\{0,1\}$/\1/p')
+	echo "$major"
+}
+
+# Pick config file from KiCad config root
+# Output: "<version>|<path/to/kicad_common.json>"
+select_kicad_config_file() {
+	local config_root="$1"
+	local preferred_version="${2:-}"
+
+	if [[ -z "$config_root" || ! -d "$config_root" ]]; then
+		return 0
+	fi
+
+	# Prefer requested version first (typically from kicad-cli --version)
+	if [[ -n "$preferred_version" && -f "$config_root/$preferred_version/kicad_common.json" ]]; then
+		echo "$preferred_version|$config_root/$preferred_version/kicad_common.json"
+		return 0
+	fi
+
+	# Fallback: choose highest available version that has kicad_common.json
+	local best_version=""
+	local best_score=-1
+	local dir
+	for dir in "$config_root"/*; do
+		if [[ ! -d "$dir" ]]; then
+			continue
+		fi
+
+		local dir_name
+		dir_name=$(basename "$dir")
+
+		if ! echo "$dir_name" | grep -qE '^[0-9]+(\.[0-9]+)?$'; then
+			continue
+		fi
+
+		if [[ ! -f "$dir/kicad_common.json" ]]; then
+			continue
+		fi
+
+		local major minor score
+		major="${dir_name%%.*}"
+		if [[ "$dir_name" == *.* ]]; then
+			minor="${dir_name#*.}"
+		else
+			minor="0"
+		fi
+
+		score=$((major * 1000 + minor))
+		if ((score > best_score)); then
+			best_score=$score
+			best_version="$dir_name"
+		fi
+	done
+
+	if [[ -n "$best_version" ]]; then
+		echo "$best_version|$config_root/$best_version/kicad_common.json"
+	fi
+}
+
 # Load KiCad environment variables
 load_kicad_environment() {
 	# Skip if already loaded
@@ -288,16 +406,33 @@ load_kicad_environment() {
 		return 0
 	fi
 
-	local kicad_version="7.0"
+	local kicad_version=""
+	kicad_version=$(detect_kicad_cli_version)
+	local kicad_major=""
 
 	# Detect platform-specific KiCad config location
+	local config_root=""
 	local config_file=""
-	if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-		config_file="$HOME/.config/kicad/$kicad_version/kicad_common.json"
-	elif [[ "$OSTYPE" == "darwin"* ]]; then
-		config_file="$HOME/Library/Preferences/kicad/$kicad_version/kicad_common.json"
-	elif [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" || "$OSTYPE" == "win32" ]]; then
-		config_file="$APPDATA/kicad/$kicad_version/kicad_common.json"
+	config_root=$(get_kicad_config_base_dir)
+	if [[ -n "$config_root" ]]; then
+		local selected_config
+		selected_config=$(select_kicad_config_file "$config_root" "$kicad_version")
+		if [[ -n "$selected_config" ]]; then
+			kicad_version="${selected_config%%|*}"
+			config_file="${selected_config#*|}"
+		fi
+	fi
+
+	if [[ -z "$kicad_version" ]]; then
+		kicad_version="7.0"
+	fi
+	kicad_major=$(kicad_version_major "$kicad_version")
+	if [[ -z "$kicad_major" ]]; then
+		kicad_major="7"
+		kicad_version="${kicad_major}.0"
+	fi
+	if [[ -z "$config_file" && -n "$config_root" ]]; then
+		config_file="$config_root/$kicad_version/kicad_common.json"
 	fi
 
 	# Detect KiCad library installation paths
@@ -325,68 +460,171 @@ load_kicad_environment() {
 		symbol_dir="$PROGRAMFILES/KiCad/share/kicad/symbols"
 		footprint_dir="$PROGRAMFILES/KiCad/share/kicad/footprints"
 		model_3d_dir="$PROGRAMFILES/KiCad/share/kicad/3dmodels"
+	# Windows versioned install path (e.g. KiCad/9.0/share/kicad)
+	elif [[ -d "$PROGRAMFILES/KiCad/$kicad_version/share/kicad/symbols" ]]; then
+		symbol_dir="$PROGRAMFILES/KiCad/$kicad_version/share/kicad/symbols"
+		footprint_dir="$PROGRAMFILES/KiCad/$kicad_version/share/kicad/footprints"
+		model_3d_dir="$PROGRAMFILES/KiCad/$kicad_version/share/kicad/3dmodels"
+	fi
+
+	# Fallback: derive share/kicad from kicad-cli location (handles custom installs)
+	if [[ -z "$symbol_dir" ]] && command -v kicad-cli >/dev/null 2>&1; then
+		local cli_path cli_dir candidate
+		cli_path=$(command -v kicad-cli)
+		cli_dir=$(cd "$(dirname "$cli_path")" && pwd)
+
+		for candidate in "$cli_dir/../share/kicad" "$cli_dir/../../share/kicad"; do
+			if candidate=$(cd "$candidate" 2>/dev/null && pwd); then
+				:
+			else
+				candidate=""
+			fi
+			if [[ -n "$candidate" && -d "$candidate/symbols" ]]; then
+				symbol_dir="$candidate/symbols"
+				footprint_dir="$candidate/footprints"
+				model_3d_dir="$candidate/3dmodels"
+				break
+			fi
+		done
+	fi
+
+	# Fallback: derive share/kicad from interpreter_path in kicad_common.json
+	if [[ -z "$symbol_dir" && -f "$config_file" ]]; then
+		local interpreter_path interpreter_unix bin_dir candidate
+		interpreter_path=$(awk -F'"' '/"interpreter_path"[[:space:]]*:/ { print $4; exit }' "$config_file" || true)
+
+		if [[ -n "$interpreter_path" ]]; then
+			# Convert Windows path to POSIX-like path for Git Bash (e.g. D:\\foo -> /d/foo)
+			interpreter_unix="${interpreter_path//\\//}"
+			if [[ "$interpreter_unix" =~ ^([A-Za-z]):/(.*)$ ]]; then
+				local drive_letter
+				drive_letter=$(echo "${BASH_REMATCH[1]}" | tr '[:upper:]' '[:lower:]')
+				interpreter_unix="/${drive_letter}/${BASH_REMATCH[2]}"
+			fi
+
+			if bin_dir=$(cd "$(dirname "$interpreter_unix")" 2>/dev/null && pwd); then
+				:
+			else
+				bin_dir=""
+			fi
+			for candidate in "$bin_dir/../share/kicad" "$bin_dir/../../share/kicad"; do
+				if candidate=$(cd "$candidate" 2>/dev/null && pwd); then
+					:
+				else
+					candidate=""
+				fi
+				if [[ -n "$candidate" && -d "$candidate/symbols" ]]; then
+					symbol_dir="$candidate/symbols"
+					footprint_dir="$candidate/footprints"
+					model_3d_dir="$candidate/3dmodels"
+					break
+				fi
+			done
+		fi
 	fi
 
 	# Set standard KiCad environment variables
 	if [[ -n "$symbol_dir" ]]; then
-		kicad_env_set "KICAD7_SYMBOL_DIR" "$symbol_dir"
+		kicad_env_set "KICAD${kicad_major}_SYMBOL_DIR" "$symbol_dir"
 		kicad_env_set "KICAD_SYMBOL_DIR" "$symbol_dir" # v6 compat
+		for compat_major in 6 7 8 9; do
+			kicad_env_set "KICAD${compat_major}_SYMBOL_DIR" "$symbol_dir"
+		done
 	fi
 
 	if [[ -n "$footprint_dir" ]]; then
-		kicad_env_set "KICAD7_FOOTPRINT_DIR" "$footprint_dir"
+		kicad_env_set "KICAD${kicad_major}_FOOTPRINT_DIR" "$footprint_dir"
 		kicad_env_set "KICAD_FOOTPRINT_DIR" "$footprint_dir" # v6 compat
+		for compat_major in 6 7 8 9; do
+			kicad_env_set "KICAD${compat_major}_FOOTPRINT_DIR" "$footprint_dir"
+		done
 	fi
 
 	if [[ -n "$model_3d_dir" ]]; then
-		kicad_env_set "KICAD7_3DMODEL_DIR" "$model_3d_dir"
+		kicad_env_set "KICAD${kicad_major}_3DMODEL_DIR" "$model_3d_dir"
 		kicad_env_set "KICAD_3DMODEL_DIR" "$model_3d_dir" # v6 compat
+		for compat_major in 6 7 8 9; do
+			kicad_env_set "KICAD${compat_major}_3DMODEL_DIR" "$model_3d_dir"
+		done
 	fi
 
 	# Parse custom variables from kicad_common.json if it exists
 	if [[ -f "$config_file" ]]; then
-		# Get custom vars from environment.vars section using awk (BSD compatible)
-		local custom_vars
-		custom_vars=$(grep -A 100 '"environment"' "$config_file" \
-			| grep -A 50 '"vars"' \
-			| awk -F'"' '/"[^"]+"[[:space:]]*:[[:space:]]*"/ {print $2}' || true)
+		# Read only environment.vars key-value pairs from JSON (BSD awk compatible)
+		local custom_var_pairs
+		custom_var_pairs=$(awk '
+		BEGIN {
+			in_environment = 0
+			in_vars = 0
+			vars_depth = 0
+		}
 
-		# Read each custom variable
-		while IFS= read -r var_name; do
-			if [[ -z "$var_name" ]]; then
-				continue
-			fi
+		!in_environment && /"environment"[[:space:]]*:/ {
+			in_environment = 1
+			next
+		}
 
-			# Extract value using awk (BSD compatible)
-			local var_value
-			var_value=$(grep -A 100 '"environment"' "$config_file" \
-				| grep -A 50 '"vars"' \
-				| awk -F'"' -v var="$var_name" '
-					$0 ~ "\"" var "\"[[:space:]]*:[[:space:]]*\"" {
-						for (i=1; i<=NF; i++) {
-							if ($i == var && $(i+2) !~ /[:,{}]/) {
-								print $(i+2)
-								exit
-							}
-						}
-					}')
-			if [[ -n "$var_value" ]]; then
+		in_environment && !in_vars && /"vars"[[:space:]]*:/ {
+			in_vars = 1
+			next
+		}
+
+		in_vars {
+			line = $0
+
+			for (i = 1; i <= length(line); i++) {
+				c = substr(line, i, 1)
+				if (c == "{") vars_depth++
+				if (c == "}") vars_depth--
+			}
+
+			if (line ~ /^[[:space:]]*"[^"]+"[[:space:]]*:[[:space:]]*"([^"\\]|\\.)*"[[:space:]]*,?[[:space:]]*$/) {
+				key = line
+				sub(/^[[:space:]]*"/, "", key)
+				sub(/".*/, "", key)
+
+				val = line
+				sub(/^[^:]*:[[:space:]]*"/, "", val)
+				sub(/"[[:space:]]*,?[[:space:]]*$/, "", val)
+
+				# JSON unescape (minimal, path-safe)
+				gsub(/\\\\/, "\\", val)
+
+				print key "|" val
+			}
+
+			if (vars_depth < 0) {
+				in_vars = 0
+				in_environment = 0
+			}
+		}
+		' "$config_file" || true)
+
+		while IFS='|' read -r var_name var_value; do
+			if [[ -n "$var_name" && -n "$var_value" ]]; then
 				kicad_env_set "$var_name" "$var_value"
 			fi
-		done <<<"$custom_vars"
+		done <<<"$custom_var_pairs"
 	else
 		warn "KiCad config file not found: $config_file"
 	fi
 
 	# Add system environment variables (override if set)
-	for var in KICAD7_SYMBOL_DIR KICAD7_FOOTPRINT_DIR KICAD7_3DMODEL_DIR \
+	for var in KICAD_SYMBOL_DIR KICAD_FOOTPRINT_DIR KICAD_3DMODEL_DIR \
 		KIPRJMOD KICAD_USER_TEMPLATE_DIR; do
 		if [[ -n "${!var:-}" ]]; then
 			kicad_env_set "$var" "${!var}"
 		fi
 	done
+	while IFS= read -r var; do
+		if [[ -n "${!var:-}" ]]; then
+			kicad_env_set "$var" "${!var}"
+		fi
+	done < <(env | awk -F= '/^KICAD[0-9]+_(SYMBOL_DIR|FOOTPRINT_DIR|3DMODEL_DIR)=/ { print $1 }')
 
 	KICAD_ENV_LOADED="1"
+
+	env_info "Detected KiCad version: $kicad_version"
 
 	# Debug: show loaded environment (only on first load)
 	local var_count

@@ -76,9 +76,9 @@ setUp() {
 	# Reset environment before each test
 	unset KICAD_ENV_LOADED
 	# shellcheck disable=SC2034  # Variables used by sourced verify_table.sh
-	declare -gA KICAD_ENV=()
+	KICAD_ENV=""
 	# shellcheck disable=SC2034  # Variables used by sourced verify_table.sh
-	declare -gA KICAD_UNRESOLVED_VARS=()
+	KICAD_UNRESOLVED_VARS=""
 	export FIXTURES="$FIXTURES_DIR"
 }
 
@@ -162,6 +162,16 @@ test_resolve_kicad_path_with_no_variables() {
 	assertEquals "$path" "$result"
 }
 
+test_resolve_kicad_path_with_legacy_colon_variable_syntax() {
+	export LEGACY_VAR="/legacy/base"
+
+	local path=":LEGACY_VAR:/models/part.step"
+	local result
+	result=$(resolve_kicad_path "$path")
+
+	assertEquals "/legacy/base/models/part.step" "$result"
+}
+
 #-----------------------------------
 # Tests for load_kicad_environment()
 #-----------------------------------
@@ -179,6 +189,41 @@ test_load_kicad_environment_is_idempotent() {
 	local second_call_loaded="$KICAD_ENV_LOADED"
 
 	assertEquals "$first_call_loaded" "$second_call_loaded"
+}
+
+test_kicad_version_major_extracts_major_part() {
+	local result
+	result=$(kicad_version_major "8.0")
+	assertEquals "8" "$result"
+
+	result=$(kicad_version_major "9")
+	assertEquals "9" "$result"
+}
+
+test_select_kicad_config_file_prefers_requested_version() {
+	local config_root="$FIXTURES_DIR/kicad-config"
+	mkdir -p "$config_root/7.0" "$config_root/8.0"
+	touch "$config_root/7.0/kicad_common.json"
+	touch "$config_root/8.0/kicad_common.json"
+
+	local result
+	result=$(select_kicad_config_file "$config_root" "7.0")
+
+	assertContains "$result" "7.0|"
+	assertContains "$result" "/7.0/kicad_common.json"
+}
+
+test_select_kicad_config_file_falls_back_to_latest_version() {
+	local config_root="$FIXTURES_DIR/kicad-config-latest"
+	mkdir -p "$config_root/7.0" "$config_root/8.0"
+	touch "$config_root/7.0/kicad_common.json"
+	touch "$config_root/8.0/kicad_common.json"
+
+	local result
+	result=$(select_kicad_config_file "$config_root" "9.0")
+
+	assertContains "$result" "8.0|"
+	assertContains "$result" "/8.0/kicad_common.json"
 }
 
 #-----------------------------------

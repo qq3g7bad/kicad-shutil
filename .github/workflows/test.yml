@@ -20,6 +20,8 @@ on:
 # Job definitions
 jobs:
   # Job 1: Run tests on multiple operating systems
+  # @CI-PLAT-001@ (FROM: @REQ-PLAT-001@)
+  # Cross-platform compatibility testing on Ubuntu (GNU awk) and macOS (BSD awk)
   test:
     # Display name for this job
     name: Run tests on ${{ matrix.os }}
@@ -49,11 +51,20 @@ jobs:
       - name: Make kicad-shutil executable
         run: chmod +x ./kicad-shutil
 
-      # Step 3: Run unit tests
+      # Step 3: Detect AWK version
+      # @CI-PLAT-002@ (FROM: @REQ-PLAT-001@)
+      # Identify GNU awk vs BSD awk for cross-platform compatibility verification
+      - name: Detect AWK version
+        run: |
+          echo "Detecting AWK implementation..."
+          awk --version || awk -W version || true
+          echo "AWK path: $(which awk)"
+
+      # Step 4: Run unit tests
       - name: Run unit tests
         run: ./test/run_tests.sh
 
-      # Step 4: Upload test logs if tests fail
+      # Step 5: Upload test logs if tests fail
       - name: Upload test logs on failure
         if: failure()
         uses: actions/upload-artifact@v4
@@ -87,6 +98,8 @@ jobs:
           rm /tmp/shfmt
 
       # Run shellcheck on all shell scripts
+      # @CI-QA-001@ (FROM: @REQ-QA-002@)
+      # Static analysis with ShellCheck for code quality enforcement
       - name: Run shellcheck
         run: |
           echo "Running shellcheck on main scripts..."
@@ -108,6 +121,8 @@ jobs:
           echo "Formatting check passed!"
 
   # Job 3: Shell portability check
+  # @CI-PLAT-003@ (FROM: @REQ-PLAT-001@)
+  # Shell portability analysis with checkbashisms and POSIX compliance reporting
   shell-portability:
     name: Shell portability analysis
     runs-on: ubuntu-latest
