@@ -339,7 +339,7 @@ detect_kicad_cli_version() {
 kicad_version_major() {
 	local version="$1"
 	local major
-	major=$(echo "$version" | sed -n 's/^\([0-9][0-9]*\)\(\.[0-9][0-9]*\)\?$/\1/p')
+	major=$(echo "$version" | sed -n 's/^\([0-9][0-9]*\)\(\.[0-9][0-9]*\)\{0,1\}$/\1/p')
 	echo "$major"
 }
 

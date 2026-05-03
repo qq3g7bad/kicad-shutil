@@ -76,9 +76,9 @@ setUp() {
 	# Reset environment before each test
 	unset KICAD_ENV_LOADED
 	# shellcheck disable=SC2034  # Variables used by sourced verify_table.sh
-	declare -gA KICAD_ENV=()
+	KICAD_ENV=""
 	# shellcheck disable=SC2034  # Variables used by sourced verify_table.sh
-	declare -gA KICAD_UNRESOLVED_VARS=()
+	KICAD_UNRESOLVED_VARS=""
 	export FIXTURES="$FIXTURES_DIR"
 }
 
