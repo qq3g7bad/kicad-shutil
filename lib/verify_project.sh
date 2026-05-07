@@ -26,6 +26,13 @@ if [[ -z "$PARSER_LOADED" ]]; then
 	PARSER_LOADED="1"
 fi
 
+# Source schematic parser (for checking instantiated symbols)
+PARSER_SCHEMATIC_LOADED="${PARSER_SCHEMATIC_LOADED:-}"
+if [[ -z "$PARSER_SCHEMATIC_LOADED" ]]; then
+	source "$(dirname "${BASH_SOURCE[0]}")/parser_schematic.sh"
+	PARSER_SCHEMATIC_LOADED="1"
+fi
+
 # @IMPL-VERIFY-PROJECT-001@ (FROM: @ARCH-VERIFY-003@)
 # Verify a KiCad project file and its associated library tables
 # Usage: verify_project_file <project_file>
@@ -101,6 +108,11 @@ verify_project_file() {
 	local footprints_3d_not_found=0
 	local symbols_missing_datasheet=0
 	local symbols_broken_datasheet=0
+	local schematic_files=0
+	local schematic_instances=0
+	local schematic_missing_footprint=0
+	local schematic_footprint_not_found=0
+	local schematic_library_unavailable=0
 
 	if [[ -f "$sym_table" ]]; then
 		((tables_found += 1))
@@ -148,6 +160,17 @@ verify_project_file() {
 		echo ""
 	fi
 
+	# Deep verification: check schematic-instantiated symbols.
+	local schematic_stats
+	schematic_stats=$(verify_schematic_instances "$project_file" "$project_dir" "$fp_table")
+	if [[ -n "$schematic_stats" ]]; then
+		schematic_files=$(echo "$schematic_stats" | grep "^SCH_FILES|" | cut -d'|' -f2 || echo "0")
+		schematic_instances=$(echo "$schematic_stats" | grep "^INSTANCES|" | cut -d'|' -f2 || echo "0")
+		schematic_missing_footprint=$(echo "$schematic_stats" | grep "^MISSING_FP|" | cut -d'|' -f2 || echo "0")
+		schematic_footprint_not_found=$(echo "$schematic_stats" | grep "^FP_NOT_FOUND|" | cut -d'|' -f2 || echo "0")
+		schematic_library_unavailable=$(echo "$schematic_stats" | grep "^LIB_UNAVAILABLE|" | cut -d'|' -f2 || echo "0")
+	fi
+
 	# Summary: show if verbose mode OR if there are any errors/warnings
 	local has_issues=false
 	if [[ $symbols_missing_footprint -gt 0 ]] \
@@ -155,7 +178,10 @@ verify_project_file() {
 		|| [[ $symbols_missing_datasheet -gt 0 ]] \
 		|| [[ $symbols_broken_datasheet -gt 0 ]] \
 		|| [[ $footprints_missing_3d -gt 0 ]] \
-		|| [[ $footprints_3d_not_found -gt 0 ]]; then
+		|| [[ $footprints_3d_not_found -gt 0 ]] \
+		|| [[ $schematic_missing_footprint -gt 0 ]] \
+		|| [[ $schematic_footprint_not_found -gt 0 ]] \
+		|| [[ $schematic_library_unavailable -gt 0 ]]; then
 		has_issues=true
 	fi
 
@@ -183,6 +209,13 @@ verify_project_file() {
 		echo "  Total footprints:$total_footprints"
 		echo "  Missing 3D model field:$footprints_missing_3d"
 		echo "  3D model file not found:$footprints_3d_not_found"
+		echo ""
+		echo "${COLOR_BOLD}Schematic Instances:${COLOR_RESET}"
+		echo "  Schematic files:$schematic_files"
+		echo "  Total instances:$schematic_instances"
+		echo "  Missing footprint field:$schematic_missing_footprint"
+		echo "  Footprint file not found:$schematic_footprint_not_found"
+		echo "  Footprint library unavailable:$schematic_library_unavailable"
 		echo "=========================================="
 		echo ""
 	fi
@@ -194,6 +227,16 @@ verify_project_file() {
 	fi
 
 	if [[ $tables_verified -lt $tables_found ]]; then
+		show_env_summary
+		return 1
+	fi
+
+	# Deep checks report explicit ERROR lines. Keep command exit status aligned.
+	if [[ $symbols_footprint_not_found -gt 0 ]] \
+		|| [[ $symbols_broken_datasheet -gt 0 ]] \
+		|| [[ $footprints_3d_not_found -gt 0 ]] \
+		|| [[ $schematic_footprint_not_found -gt 0 ]] \
+		|| [[ $schematic_library_unavailable -gt 0 ]]; then
 		show_env_summary
 		return 1
 	fi
@@ -424,6 +467,213 @@ verify_symbol_libraries() {
 	echo "FP_NOT_FOUND|$footprint_not_found"
 	echo "MISSING_DS|$missing_datasheet"
 	echo "BROKEN_DS|$broken_datasheet"
+}
+
+# Verify instantiated symbols in schematic files against fp-lib-table.
+# Usage: verify_schematic_instances <project_file> <project_dir> <fp_table_file>
+# Output: Statistics in pipe-delimited format
+verify_schematic_instances() {
+	local project_file="$1"
+	local project_dir="$2"
+	local fp_table="$3"
+
+	local schematic_files=0
+	local instances_total=0
+	local missing_footprint=0
+	local footprint_not_found=0
+	local library_unavailable=0
+
+	local footprint_map=""
+	local lib_dir_map=""
+
+	local_fp_map_set() {
+		local key="$1"
+		local value="$2"
+		footprint_map="${footprint_map}${key}|${value}"$'\n'
+	}
+
+	local_fp_map_get() {
+		local key="$1"
+		echo "$footprint_map" | grep "^${key}|" | head -1 | cut -d'|' -f2-
+	}
+
+	local_lib_dir_set() {
+		local key="$1"
+		local value="$2"
+		lib_dir_map="${lib_dir_map}${key}|${value}"$'\n'
+	}
+
+	local_lib_dir_get() {
+		local key="$1"
+		echo "$lib_dir_map" | grep "^${key}|" | head -1 | cut -d'|' -f2-
+	}
+
+	if [[ -n "$fp_table" && -f "$fp_table" ]]; then
+		if [[ -z "$KICAD_ENV_LOADED" ]]; then
+			source "$(dirname "${BASH_SOURCE[0]}")/verify_table.sh"
+			load_kicad_environment
+		fi
+
+		local table_content
+		table_content=$(cat "$fp_table")
+		local fp_entries
+		fp_entries=$(echo "$table_content" | awk '
+				/^[[:space:]]*\(lib[[:space:]]+\(name[[:space:]]+"[^"]+"/ {
+					entry = $0
+					paren_depth = gsub(/\(/, "&") - gsub(/\)/, "&")
+					while (paren_depth > 0 && getline > 0) {
+						entry = entry "\n" $0
+						paren_depth += gsub(/\(/, "&") - gsub(/\)/, "&")
+					}
+					print entry
+					print "---LIBSEP---"
+				}
+			')
+
+		while IFS= read -r entry; do
+			if [[ "$entry" == "---LIBSEP---" ]] || [[ -z "$entry" ]]; then
+				continue
+			fi
+
+			if echo "$entry" | grep -qE '\(disabled\)'; then
+				continue
+			fi
+
+			local lib_name
+			lib_name=$(echo "$entry" | sed -n 's/.*(name[[:space:]]*"\([^"]*\)".*/\1/p')
+			local lib_uri
+			lib_uri=$(echo "$entry" | sed -n 's/.*(uri[[:space:]]*"\([^"]*\)".*/\1/p')
+
+			if [[ -z "$lib_name" || -z "$lib_uri" ]]; then
+				continue
+			fi
+
+			local resolved_uri
+			resolved_uri=$(resolve_kicad_path "$lib_uri" "fp-lib")
+			if [[ -z "$resolved_uri" || ! -d "$resolved_uri" ]]; then
+				continue
+			fi
+
+			local_lib_dir_set "$lib_name" "$resolved_uri"
+
+			local mod_files
+			mod_files=$(find "$resolved_uri" -maxdepth 1 -name "*.kicad_mod" 2>/dev/null)
+			while IFS= read -r mod_file; do
+				if [[ -z "$mod_file" || ! -f "$mod_file" ]]; then
+					continue
+				fi
+				local fp_name
+				fp_name=$(basename "$mod_file" .kicad_mod)
+				local_fp_map_set "$lib_name:$fp_name" "$mod_file"
+			done <<<"$mod_files"
+		done <<<"$fp_entries"
+	fi
+
+	local project_name
+	project_name=$(basename "$project_file" .kicad_pro)
+	local root_sch="$project_dir/$project_name.kicad_sch"
+	if [[ ! -f "$root_sch" ]]; then
+		echo "SCH_FILES|0"
+		echo "INSTANCES|0"
+		echo "MISSING_FP|0"
+		echo "FP_NOT_FOUND|0"
+		echo "LIB_UNAVAILABLE|0"
+		return 0
+	fi
+
+	local pending_files
+	pending_files="$root_sch"
+	local visited_files=""
+
+	while [[ -n "$pending_files" ]]; do
+		local current_file
+		current_file=$(echo "$pending_files" | head -1)
+		pending_files=$(echo "$pending_files" | tail -n +2)
+
+		if [[ -z "$current_file" ]]; then
+			continue
+		fi
+
+		if echo "$visited_files" | grep -Fxq "$current_file"; then
+			continue
+		fi
+		visited_files="${visited_files}${current_file}"$'\n'
+
+		if [[ ! -f "$current_file" ]]; then
+			warn "Schematic file not found:$current_file"
+			continue
+		fi
+
+		((schematic_files += 1))
+
+		local instances
+		instances=$(parse_schematic_instances "$current_file")
+		while IFS='|' read -r kind _ reference footprint; do
+			if [[ "$kind" != "INSTANCE" ]]; then
+				continue
+			fi
+
+			if [[ -z "$reference" || "$reference" == \#* ]]; then
+				continue
+			fi
+
+			((instances_total += 1))
+
+			if [[ -z "$footprint" ]]; then
+				((missing_footprint += 1))
+				echo "${COLOR_YELLOW}[WARN]${COLOR_RESET}	${COLOR_CYAN}schematic${COLOR_RESET}	$(basename "$current_file")	$reference	MISSING_FOOTPRINT_FIELD" >&2
+				continue
+			fi
+
+			local fp_lib
+			fp_lib="${footprint%%:*}"
+
+			if [[ "$fp_lib" == "$footprint" ]] || [[ -z "$fp_lib" ]]; then
+				((library_unavailable += 1))
+				echo "${COLOR_RED}[ERROR]${COLOR_RESET}	${COLOR_CYAN}schematic${COLOR_RESET}	$(basename "$current_file")	$reference	FOOTPRINT_LIBRARY_UNAVAILABLE	$footprint" >&2
+				continue
+			fi
+
+			if [[ -n "$(local_fp_map_get "$footprint")" ]]; then
+				continue
+			fi
+
+			if [[ -n "$(local_lib_dir_get "$fp_lib")" ]]; then
+				((footprint_not_found += 1))
+				echo "${COLOR_RED}[ERROR]${COLOR_RESET}	${COLOR_CYAN}schematic${COLOR_RESET}	$(basename "$current_file")	$reference	SCHEMATIC_FOOTPRINT_NOT_FOUND	$footprint" >&2
+			else
+				((library_unavailable += 1))
+				echo "${COLOR_RED}[ERROR]${COLOR_RESET}	${COLOR_CYAN}schematic${COLOR_RESET}	$(basename "$current_file")	$reference	FOOTPRINT_LIBRARY_UNAVAILABLE	$footprint" >&2
+			fi
+		done <<<"$instances"
+
+		local sheet_files
+		sheet_files=$(list_sheet_files "$current_file")
+		while IFS= read -r sheet_file; do
+			if [[ -z "$sheet_file" ]]; then
+				continue
+			fi
+
+			local sheet_path
+			if [[ "$sheet_file" == /* ]]; then
+				sheet_path="$sheet_file"
+			else
+				sheet_path="$(cd "$(dirname "$current_file")" && pwd)/$sheet_file"
+			fi
+
+			if [[ -n "$pending_files" ]]; then
+				pending_files="${pending_files}"$'\n'"$sheet_path"
+			else
+				pending_files="$sheet_path"
+			fi
+		done <<<"$sheet_files"
+	done
+
+	echo "SCH_FILES|$schematic_files"
+	echo "INSTANCES|$instances_total"
+	echo "MISSING_FP|$missing_footprint"
+	echo "FP_NOT_FOUND|$footprint_not_found"
+	echo "LIB_UNAVAILABLE|$library_unavailable"
 }
 
 # @IMPL-VERIFY-PROJECT-003@ (FROM: @ARCH-VERIFY-003@)
