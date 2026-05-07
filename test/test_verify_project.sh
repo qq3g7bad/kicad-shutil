@@ -27,8 +27,9 @@ export COLOR_RESET=""
 # Test Setup
 #-----------------------------------
 oneTimeSetUp() {
-	# Create test project directory structure
-	mkdir -p "$FIXTURES_DIR"
+	# Create deterministic local fixture structure.
+	mkdir -p "$FIXTURES_DIR/libs/sym"
+	mkdir -p "$FIXTURES_DIR/libs/fp/Test.pretty"
 
 	# Create a test .kicad_pro file
 	cat >"$FIXTURES_DIR/test_project.kicad_pro" <<'EOF'
@@ -54,12 +55,76 @@ oneTimeSetUp() {
 }
 EOF
 
+	cat >"$FIXTURES_DIR/test_project.kicad_sch" <<'EOF'
+(kicad_sch (version 20230121) (generator eeschema)
+	(uuid 00000000-0000-0000-0000-000000000000)
+	(paper "A4")
+
+	(symbol (lib_id "device:Resistor") (at 10 10 0)
+		(property "Reference" "R1" (at 0 0 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "10k" (at 0 -2.54 0) (effects (font (size 1.27 1.27))))
+		(property "Footprint" "Test:Existing" (at 0 0 0) (effects (font (size 1.27 1.27)) hide))
+	)
+
+	(symbol (lib_id "device:Resistor") (at 20 10 0)
+		(property "Reference" "R2" (at 0 0 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "22k" (at 0 -2.54 0) (effects (font (size 1.27 1.27))))
+		(property "Footprint" "Test:Missing" (at 0 0 0) (effects (font (size 1.27 1.27)) hide))
+	)
+
+	(symbol (lib_id "device:Resistor") (at 30 10 0)
+		(property "Reference" "R3" (at 0 0 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "33k" (at 0 -2.54 0) (effects (font (size 1.27 1.27))))
+		(property "Footprint" "UnknownLib:Any" (at 0 0 0) (effects (font (size 1.27 1.27)) hide))
+	)
+
+	(symbol (lib_id "device:Resistor") (at 40 10 0)
+		(property "Reference" "R4" (at 0 0 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "47k" (at 0 -2.54 0) (effects (font (size 1.27 1.27))))
+		(property "Footprint" "" (at 0 0 0) (effects (font (size 1.27 1.27)) hide))
+	)
+
+	(symbol (lib_id "power:GND") (at 50 10 0)
+		(property "Reference" "#PWR01" (at 0 0 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "GND" (at 0 -2.54 0) (effects (font (size 1.27 1.27))))
+	)
+
+	(sheet_instances
+		(path "/" (page "1"))
+	)
+)
+EOF
+
+	cat >"$FIXTURES_DIR/libs/sym/device.kicad_sym" <<'EOF'
+(kicad_symbol_lib (version 20220914) (generator kicad_symbol_editor)
+	(symbol "Resistor" (pin_names (offset 0.508)) (in_bom yes) (on_board yes)
+		(property "Reference" "R" (at 0 0 0)
+			(effects (font (size 1.27 1.27)))
+		)
+		(property "Value" "Resistor" (at 0 -2.54 0)
+			(effects (font (size 1.27 1.27)))
+		)
+		(property "Footprint" "Test:Existing" (at 0 0 0)
+			(effects (font (size 1.27 1.27)) hide)
+		)
+		(property "Datasheet" "" (at 0 0 0)
+			(effects (font (size 1.27 1.27)) hide)
+		)
+	)
+)
+EOF
+
+	cat >"$FIXTURES_DIR/libs/fp/Test.pretty/Existing.kicad_mod" <<'EOF'
+(footprint "Existing" (version 20240108) (generator kicad)
+	(layer "F.Cu")
+)
+EOF
+
 	# Create a test sym-lib-table
 	cat >"$FIXTURES_DIR/sym-lib-table" <<'EOF'
 (sym_lib_table
   (version 7)
-  (lib (name "power")(type "KiCad")(uri "${KICAD7_SYMBOL_DIR}/power.kicad_sym")(options "")(descr "Power symbols"))
-  (lib (name "device")(type "KiCad")(uri "${KICAD7_SYMBOL_DIR}/Device.kicad_sym")(options "")(descr "Device symbols"))
+	(lib (name "device")(type "KiCad")(uri "${KIPRJMOD}/libs/sym/device.kicad_sym")(options "")(descr "Device symbols"))
 )
 EOF
 
@@ -67,8 +132,7 @@ EOF
 	cat >"$FIXTURES_DIR/fp-lib-table" <<'EOF'
 (fp_lib_table
   (version 7)
-  (lib (name "Resistor_SMD")(type "KiCad")(uri "${KICAD7_FOOTPRINT_DIR}/Resistor_SMD.pretty")(options "")(descr "SMD resistors"))
-  (lib (name "Capacitor_SMD")(type "KiCad")(uri "${KICAD7_FOOTPRINT_DIR}/Capacitor_SMD.pretty")(options "")(descr "SMD capacitors"))
+	(lib (name "Test")(type "KiCad")(uri "${KIPRJMOD}/libs/fp/Test.pretty")(options "")(descr "Test footprints"))
 )
 EOF
 }
@@ -79,23 +143,21 @@ oneTimeTearDown() {
 }
 
 #-----------------------------------
-# Test: verify_project_file() basic functionality
+# Test: verify_project_file() fails on schematic-instance footprint errors
 #-----------------------------------
-testVerifyProjectFileBasic() {
+testVerifyProjectFileFailsOnSchematicErrors() {
 	if ! declare -f verify_project_file >/dev/null; then
 		startSkipping
 		return
 	fi
 
-	# This test just checks that the function runs without errors
-	# We don't verify the actual library paths since they depend on system KiCad installation
-	local result
-	verify_project_file "$FIXTURES_DIR/test_project.kicad_pro" >/dev/null 2>&1
-	result=$?
+	local output
+	output=$(verify_project_file "$FIXTURES_DIR/test_project.kicad_pro" 2>&1)
+	local result=$?
 
-	# We accept either success (0) or failure (1) since library paths may not exist
-	# The important thing is the function doesn't crash
-	assertTrue "verify_project_file should complete" "[ $result -eq 0 ] || [ $result -eq 1 ]"
+	assertEquals "verify_project_file should fail on schematic footprint errors" 1 "$result"
+	assertContains "Missing footprint target should be reported" "$output" "SCHEMATIC_FOOTPRINT_NOT_FOUND"
+	assertContains "Unavailable footprint library should be reported" "$output" "FOOTPRINT_LIBRARY_UNAVAILABLE"
 }
 
 #-----------------------------------
@@ -126,6 +188,39 @@ testKIPRJMODIsSet() {
 testLibraryTablesExist() {
 	assertTrue "sym-lib-table should exist" "[ -f '$FIXTURES_DIR/sym-lib-table' ]"
 	assertTrue "fp-lib-table should exist" "[ -f '$FIXTURES_DIR/fp-lib-table' ]"
+}
+
+#-----------------------------------
+# Test: verify_schematic_instances() stats
+#-----------------------------------
+testVerifySchematicInstancesStats() {
+	if ! declare -f verify_schematic_instances >/dev/null; then
+		startSkipping
+		return
+	fi
+
+	# verify_schematic_instances expects KIPRJMOD for path resolution.
+	export KIPRJMOD="$FIXTURES_DIR"
+
+	local stats
+	stats=$(verify_schematic_instances "$FIXTURES_DIR/test_project.kicad_pro" "$FIXTURES_DIR" "$FIXTURES_DIR/fp-lib-table" 2>/dev/null)
+
+	local sch_files
+	sch_files=$(echo "$stats" | awk -F'|' '$1 == "SCH_FILES" { print $2 }')
+	local instances
+	instances=$(echo "$stats" | awk -F'|' '$1 == "INSTANCES" { print $2 }')
+	local missing_fp
+	missing_fp=$(echo "$stats" | awk -F'|' '$1 == "MISSING_FP" { print $2 }')
+	local fp_not_found
+	fp_not_found=$(echo "$stats" | awk -F'|' '$1 == "FP_NOT_FOUND" { print $2 }')
+	local lib_unavailable
+	lib_unavailable=$(echo "$stats" | awk -F'|' '$1 == "LIB_UNAVAILABLE" { print $2 }')
+
+	assertEquals "One schematic file should be scanned" "1" "$sch_files"
+	assertEquals "Only non-power symbols should be counted" "4" "$instances"
+	assertEquals "One symbol should miss footprint field" "1" "$missing_fp"
+	assertEquals "One symbol should point to missing footprint" "1" "$fp_not_found"
+	assertEquals "One symbol should reference unavailable library" "1" "$lib_unavailable"
 }
 
 # Load and run shunit2
