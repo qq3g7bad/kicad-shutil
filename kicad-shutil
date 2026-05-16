@@ -146,7 +146,8 @@ ${COLOR_BOLD}OUTPUT STRUCTURE${COLOR_RESET}
   ├── gerbers/   All Gerber layers
   ├── drill/     Drill files (Excellon format)
   ├── position/  Position files (front.pos, back.pos)
-  └── netlist/   Netlist file (KiCad XML)
+  ├── netlist/   Netlist file (KiCad XML)
+  └── preview/   Board previews (3D *-Front/Back.png, 2D *-Front/Back.svg)
 
 ${COLOR_BOLD}EXAMPLES${COLOR_RESET}
   ${COLOR_GRAY}\$${COLOR_RESET} kicad-shutil pcb gerber-output my_board.kicad_pcb

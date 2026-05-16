@@ -18,6 +18,7 @@ PCB_EXPORT_STATS_gerbers=0
 PCB_EXPORT_STATS_drill=0
 PCB_EXPORT_STATS_position=0
 PCB_EXPORT_STATS_netlist=0
+PCB_EXPORT_STATS_preview=0
 PCB_EXPORT_STATS_total=0
 PCB_EXPORT_STATS_failed=0
 
@@ -27,6 +28,7 @@ init_pcb_export_stats() {
 	PCB_EXPORT_STATS_drill=0
 	PCB_EXPORT_STATS_position=0
 	PCB_EXPORT_STATS_netlist=0
+	PCB_EXPORT_STATS_preview=0
 	PCB_EXPORT_STATS_total=0
 	PCB_EXPORT_STATS_failed=0
 }
@@ -289,6 +291,72 @@ export_netlist() {
 	fi
 }
 
+# @IMPL-PCB-EXPORT-008@ (FROM: @ARCH-PCB-001@)
+# Export board preview images
+# Generates both a 3D render (PNG) and a 2D layer composite (SVG) for the
+# front and back of the board. Replaces the legacy pcbnew + inkscape
+# plot_board.py workflow using only kicad-cli (KiCad 8.0+ for 3D render).
+# Args: pcb_file output_dir
+# Returns: 0 on success, 1 on failure
+export_preview() {
+	local pcb_file="$1"
+	local output_dir="$2"
+	local preview_dir="${output_dir}/preview"
+	local log_file="${output_dir}/preview.log"
+	local base_name
+	base_name=$(basename "${pcb_file%.kicad_pcb}")
+	local failed=0
+
+	info "Generating board preview images..."
+
+	# Create output directory
+	mkdir -p "$preview_dir" || {
+		error "Failed to create directory: $preview_dir"
+		return 1
+	}
+
+	# 3D render (PNG) - requires kicad-cli with 3D render support (KiCad 8.0+)
+	if ! kicad-cli pcb render --side top \
+		--output "${preview_dir}/${base_name}-Front.png" "$pcb_file" >>"$log_file" 2>&1; then
+		error "Failed to render front 3D preview (see $log_file)"
+		failed=1
+	fi
+
+	if ! kicad-cli pcb render --side bottom \
+		--output "${preview_dir}/${base_name}-Back.png" "$pcb_file" >>"$log_file" 2>&1; then
+		error "Failed to render back 3D preview (see $log_file)"
+		failed=1
+	fi
+
+	# 2D layer composite (SVG), board area only, soldermask subtracted from silk
+	if ! kicad-cli pcb export svg --mode-single --exclude-drawing-sheet \
+		--page-size-mode 2 --subtract-soldermask \
+		--layers F.Cu,F.Mask,F.Paste,F.SilkS,Edge.Cuts \
+		--output "${preview_dir}/${base_name}-Front.svg" "$pcb_file" >>"$log_file" 2>&1; then
+		error "Failed to export front 2D preview (see $log_file)"
+		failed=1
+	fi
+
+	# Back side is mirrored so it reads the same orientation as the front
+	if ! kicad-cli pcb export svg --mode-single --exclude-drawing-sheet \
+		--page-size-mode 2 --subtract-soldermask --mirror \
+		--layers B.Cu,B.Mask,B.Paste,B.SilkS,Edge.Cuts \
+		--output "${preview_dir}/${base_name}-Back.svg" "$pcb_file" >>"$log_file" 2>&1; then
+		error "Failed to export back 2D preview (see $log_file)"
+		failed=1
+	fi
+
+	if [[ $failed -eq 0 ]]; then
+		PCB_EXPORT_STATS_preview=1
+		PCB_EXPORT_STATS_total=$((PCB_EXPORT_STATS_total + 1))
+		success "Preview images exported to: preview/"
+		return 0
+	else
+		PCB_EXPORT_STATS_failed=$((PCB_EXPORT_STATS_failed + 1))
+		return 1
+	fi
+}
+
 # Print export summary
 print_pcb_export_summary() {
 	local output_dir="$1"
@@ -323,6 +391,12 @@ print_pcb_export_summary() {
 		echo "  - Netlist:  SKIPPED (no schematic)"
 	else
 		echo "  ✗ Netlist:  FAILED"
+	fi
+
+	if [[ $PCB_EXPORT_STATS_preview -eq 1 ]]; then
+		echo "  ✓ Preview:  preview/"
+	else
+		echo "  ✗ Preview:  FAILED"
 	fi
 
 	echo
@@ -372,6 +446,7 @@ export_gerber_output() {
 	export_drill "$PCB_FILE" "$output_dir"
 	export_position "$PCB_FILE" "$output_dir"
 	export_netlist "$SCH_FILE" "$output_dir"
+	export_preview "$PCB_FILE" "$output_dir"
 
 	# Print summary
 	print_pcb_export_summary "$output_dir"

@@ -426,6 +426,7 @@ MIT License - See LICENSE file for details
 - [KiCad](https://www.kicad.org/) - Excellent EDA tool
 - [DigiKey](https://www.digikey.com/) - Official API access
 - [shunit2](https://github.com/kward/shunit2) - Shell unit testing framework
+- [Greg Davill](https://github.com/gregdavill) - Whose [kicadScripts](https://github.com/gregdavill/kicadScripts) (`plot_gerbers.py`, `plot_board.py`) inspired the `pcb` manufacturing-output and board-preview features, here reimplemented with kicad-cli
 
 ## 🔗 Requirements Traceability
 

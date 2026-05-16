@@ -420,6 +420,7 @@ PCB manufacturing output generation wrapping kicad-cli commands.
 - `export_drill()` - Generate drill files in Excellon format
 - `export_position()` - Generate Pick & Place position files (front/back CSV)
 - `export_netlist()` - Generate netlist in KiCad XML format
+- `export_preview()` - Generate board previews: 3D render (PNG) + 2D layer composite (SVG), front and back
 - `init_pcb_export_stats()` - Initialize export statistics counters
 - `print_pcb_export_summary()` - Display manufacturing export results
 
@@ -436,8 +437,16 @@ manufacturing/
 ├── gerbers/     All Gerber layers
 ├── drill/       Drill files (Excellon format)
 ├── position/    Position files (front.pos, back.pos)
-└── netlist/     Netlist file (KiCad XML)
+├── netlist/     Netlist file (KiCad XML)
+└── preview/     Board previews: 3D render (*-Front/Back.png),
+                 2D layer composite (*-Front/Back.svg)
 ```
+
+The `preview/` outputs replace the legacy pcbnew + inkscape `plot_board.py`
+workflow with a pure kicad-cli implementation (`kicad-cli pcb render` for the
+3D PNG, `kicad-cli pcb export svg --mode-single` for the 2D composite). The 3D
+render requires kicad-cli from KiCad 8.0+; on older versions that step fails
+and is reported under the best-effort strategy without blocking other outputs.
 
 **Best-Effort Strategy (REQ-PCB-003):**
 - Each export step runs independently
@@ -457,8 +466,9 @@ flowchart TD
     G --> H{SCH_FILE<br/>available?}
     H -->|Yes| I[export_netlist<br/>KiCad XML]
     H -->|No| J[Skip netlist]
-    I --> K[print_pcb_export_summary]
-    J --> K
+    I --> P[export_preview<br/>3D PNG + 2D SVG]
+    J --> P
+    P --> K[print_pcb_export_summary]
 
     style B fill:#e1f5ff
     style C fill:#e1f5ff
@@ -466,6 +476,7 @@ flowchart TD
     style F fill:#fff4e6
     style G fill:#fff4e6
     style I fill:#fff4e6
+    style P fill:#fff4e6
     style K fill:#e8f5e9
 ```
 

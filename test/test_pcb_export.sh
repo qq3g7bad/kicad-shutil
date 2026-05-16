@@ -51,6 +51,7 @@ testInitPcbExportStats() {
 	assertEquals "drill should be 0" "0" "$PCB_EXPORT_STATS_drill"
 	assertEquals "position should be 0" "0" "$PCB_EXPORT_STATS_position"
 	assertEquals "netlist should be 0" "0" "$PCB_EXPORT_STATS_netlist"
+	assertEquals "preview should be 0" "0" "$PCB_EXPORT_STATS_preview"
 	assertEquals "total should be 0" "0" "$PCB_EXPORT_STATS_total"
 	assertEquals "failed should be 0" "0" "$PCB_EXPORT_STATS_failed"
 }
@@ -283,6 +284,46 @@ testExportNetlistCreatesDirectory() {
 }
 
 #-----------------------------------
+# Test: export_preview() creates output directory
+#-----------------------------------
+testExportPreviewCreatesDirectory() {
+	# Skip if kicad-cli not available
+	if ! command -v kicad-cli &>/dev/null; then
+		startSkipping
+	fi
+
+	local pcb_file="$FIXTURES_DIR/simple.kicad_pcb"
+	init_pcb_export_stats
+
+	export_preview "$pcb_file" "$TEST_OUTPUT_DIR" >/dev/null 2>&1
+
+	assertTrue "Preview directory should be created" "[ -d '$TEST_OUTPUT_DIR/preview' ]"
+	assertTrue "Log file should be created" "[ -f '$TEST_OUTPUT_DIR/preview.log' ]"
+}
+
+#-----------------------------------
+# Test: export_preview() produces 2D SVG and 3D PNG for both sides
+#-----------------------------------
+testExportPreviewProducesFrontAndBack() {
+	# Skip if kicad-cli not available
+	if ! command -v kicad-cli &>/dev/null; then
+		startSkipping
+	fi
+
+	local pcb_file="$FIXTURES_DIR/simple.kicad_pcb"
+	init_pcb_export_stats
+
+	export_preview "$pcb_file" "$TEST_OUTPUT_DIR" >/dev/null 2>&1
+
+	local preview_dir="$TEST_OUTPUT_DIR/preview"
+	assertTrue "Front 3D render (PNG) should exist" "[ -f '$preview_dir/simple-Front.png' ]"
+	assertTrue "Back 3D render (PNG) should exist" "[ -f '$preview_dir/simple-Back.png' ]"
+	assertTrue "Front 2D composite (SVG) should exist" "[ -f '$preview_dir/simple-Front.svg' ]"
+	assertTrue "Back 2D composite (SVG) should exist" "[ -f '$preview_dir/simple-Back.svg' ]"
+	assertEquals "Preview stat should be 1 on success" "1" "$PCB_EXPORT_STATS_preview"
+}
+
+#-----------------------------------
 # Test: print_pcb_export_summary() displays results
 #-----------------------------------
 testPrintPcbExportSummary() {
@@ -291,6 +332,7 @@ testPrintPcbExportSummary() {
 	PCB_EXPORT_STATS_drill=1
 	PCB_EXPORT_STATS_position=0
 	PCB_EXPORT_STATS_netlist=0
+	PCB_EXPORT_STATS_preview=1
 	PCB_EXPORT_STATS_total=3
 	PCB_EXPORT_STATS_failed=1
 	SCH_FILE=""
@@ -303,6 +345,7 @@ testPrintPcbExportSummary() {
 	assertContains "Should show drill succeeded" "$output" "Drill"
 	assertContains "Should show position failed" "$output" "Position"
 	assertContains "Should show netlist skipped" "$output" "SKIPPED"
+	assertContains "Should show preview succeeded" "$output" "Preview"
 	assertContains "Should show totals" "$output" "3 successful"
 	assertContains "Should show failures" "$output" "1 failed"
 }
@@ -328,6 +371,7 @@ testFullExportWithKicadCli() {
 	assertTrue "Drill directory should exist" "[ -d '$TEST_OUTPUT_DIR/drill' ]"
 	assertTrue "Position directory should exist" "[ -d '$TEST_OUTPUT_DIR/position' ]"
 	assertTrue "Netlist directory should exist" "[ -d '$TEST_OUTPUT_DIR/netlist' ]"
+	assertTrue "Preview directory should exist" "[ -d '$TEST_OUTPUT_DIR/preview' ]"
 }
 
 #-----------------------------------

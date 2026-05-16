@@ -238,7 +238,8 @@ The system shall generate manufacturing output files from KiCad PCB designs usin
 - Generate drill files in Excellon format
 - Generate position (Pick & Place) files in CSV format for front and back sides
 - Generate netlist in KiCad XML format from schematic files
-- Organize output into subdirectories (gerbers/, drill/, position/, netlist/)
+- Generate board preview images: 3D render (PNG) and 2D layer composite (SVG), for front and back
+- Organize output into subdirectories (gerbers/, drill/, position/, netlist/, preview/)
 - Default output directory: `manufacturing/` relative to PCB file location
 - Support custom output directory via `--output` flag
 
@@ -263,7 +264,7 @@ The system shall verify kicad-cli availability and version compatibility.
 **Acceptance Criteria:**
 
 - Check that kicad-cli is available in PATH
-- Detect kicad-cli version and warn if older than 7.0
+- Detect kicad-cli version and warn if older than 7.0 (3D preview render requires 8.0+)
 - Provide clear error messages with installation instructions when kicad-cli is not found
 - Continue with best-effort approach when individual export steps fail
 
@@ -274,7 +275,7 @@ The system shall provide a summary of manufacturing export results.
 
 **Acceptance Criteria:**
 
-- Track success/failure status for each export type (Gerbers, drill, position, netlist)
+- Track success/failure status for each export type (Gerbers, drill, position, netlist, preview)
 - Display summary with per-type status indicators
 - Show output directory path
 - Report total successful and failed exports
