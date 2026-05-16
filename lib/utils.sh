@@ -33,6 +33,9 @@ export COLOR_RED COLOR_GREEN COLOR_YELLOW COLOR_BLUE COLOR_MAGENTA COLOR_CYAN CO
 # Logging functions
 info() {
 	[[ "${VERBOSE:-false}" == "true" ]] && echo "${COLOR_BLUE}[INFO]${COLOR_RESET} $*" >&2
+	# Always succeed: callers run under `set -e`, and a non-verbose
+	# short-circuit must not abort the script.
+	return 0
 }
 
 warn() {
@@ -45,10 +48,12 @@ error() {
 
 success() {
 	[[ "${VERBOSE:-false}" == "true" ]] && echo "${COLOR_GREEN}[OK]:${COLOR_RESET} $*" >&2
+	return 0
 }
 
 env_info() {
 	[[ "${VERBOSE:-false}" == "true" ]] && echo "${COLOR_BLUE}[INFO]${COLOR_RESET}	${COLOR_GREEN}env${COLOR_RESET}	$*" >&2
+	return 0
 }
 
 gray_text() {
