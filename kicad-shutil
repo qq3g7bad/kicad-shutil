@@ -34,7 +34,8 @@ ${COLOR_BOLD}USAGE${COLOR_RESET}
 ${COLOR_BOLD}CORE COMMANDS${COLOR_RESET}
   ${COLOR_BOLD}project${COLOR_RESET}    Verify KiCad project and all libraries
   ${COLOR_BOLD}sym${COLOR_RESET}        Manage symbol library files (.kicad_sym)
-  ${COLOR_BOLD}pcb${COLOR_RESET}        Generate PCB manufacturing output files
+  ${COLOR_BOLD}mod${COLOR_RESET}        Verify footprint silkscreen uniformity (.kicad_mod)
+  ${COLOR_BOLD}pcb${COLOR_RESET}        Generate PCB manufacturing output / verify silkscreen
 
 ${COLOR_BOLD}FLAGS${COLOR_RESET}
   ${COLOR_CYAN}--verbose${COLOR_RESET}         Show detailed verbose output
@@ -45,7 +46,9 @@ ${COLOR_BOLD}EXAMPLES${COLOR_RESET}
   ${COLOR_GRAY}\$${COLOR_RESET} kicad-shutil project my_project.kicad_pro
   ${COLOR_GRAY}\$${COLOR_RESET} kicad-shutil my_project.kicad_pro
   ${COLOR_GRAY}\$${COLOR_RESET} kicad-shutil sym --update-digikey pmic.kicad_sym
+  ${COLOR_GRAY}\$${COLOR_RESET} kicad-shutil mod R_0402.kicad_mod
   ${COLOR_GRAY}\$${COLOR_RESET} kicad-shutil pcb gerber-output my_board.kicad_pcb
+  ${COLOR_GRAY}\$${COLOR_RESET} kicad-shutil pcb verify my_board.kicad_pcb
 
 ${COLOR_GRAY}Use 'kicad-shutil <command> --help' for more information about a command.${COLOR_RESET}
 EOF
@@ -118,6 +121,42 @@ EOF
 	exit "$exit_code"
 }
 
+# Mod command: verify footprint silkscreen uniformity
+# Usage: usage_mod [exit_code]
+usage_mod() {
+	local exit_code="${1:-0}"
+	cat <<EOF
+${COLOR_BOLD}kicad-shutil mod${COLOR_RESET} - Verify KiCad footprint silkscreen uniformity
+
+${COLOR_BOLD}USAGE${COLOR_RESET}
+  kicad-shutil mod [flags] <file.kicad_mod> [<file2.kicad_mod> ...]
+
+${COLOR_BOLD}DESCRIPTION${COLOR_RESET}
+  Checks that silkscreen graphics are visually consistent:
+    ${COLOR_GREEN}•${COLOR_RESET} All silkscreen line widths are the same
+    ${COLOR_GREEN}•${COLOR_RESET} All reference-designator (U1, C3, …) text sizes are the same
+
+  By default each file only needs to be internally consistent (the actual
+  value may differ between files); a cross-file summary is printed at the
+  end. Use the ${COLOR_CYAN}--expected-*${COLOR_RESET} flags to enforce specific values instead.
+
+${COLOR_BOLD}FLAGS${COLOR_RESET}
+  ${COLOR_CYAN}--expected-width${COLOR_RESET} <mm>          Require this silk line width (e.g. 0.15)
+  ${COLOR_CYAN}--expected-text-size${COLOR_RESET} <h[xw]>   Require this reference text size (e.g. 1 or 1x1)
+  ${COLOR_CYAN}--expected-text-thickness${COLOR_RESET} <mm> Require this reference text thickness
+  ${COLOR_CYAN}--verbose${COLOR_RESET}                      Show every distinct value found
+  ${COLOR_CYAN}-h, --help${COLOR_RESET}                     Show help for command
+
+${COLOR_BOLD}EXAMPLES${COLOR_RESET}
+  ${COLOR_GRAY}\$${COLOR_RESET} kicad-shutil mod R_0402.kicad_mod
+  ${COLOR_GRAY}\$${COLOR_RESET} kicad-shutil mod *.kicad_mod
+  ${COLOR_GRAY}\$${COLOR_RESET} kicad-shutil --verbose mod *.kicad_mod
+  ${COLOR_GRAY}\$${COLOR_RESET} kicad-shutil mod --expected-width 0.15 --expected-text-size 1x1 *.kicad_mod
+
+EOF
+	exit "$exit_code"
+}
+
 # PCB command: generate manufacturing output
 # Usage: usage_pcb [exit_code]
 usage_pcb() {
@@ -130,11 +169,15 @@ ${COLOR_BOLD}USAGE${COLOR_RESET}
 
 ${COLOR_BOLD}OPERATIONS${COLOR_RESET}
   ${COLOR_BOLD}gerber-output${COLOR_RESET}  Generate all manufacturing files (Gerbers, drill, position, netlist)
+  ${COLOR_BOLD}verify${COLOR_RESET}         Verify board silkscreen uniformity (line width, ref text size)
 
 ${COLOR_BOLD}FLAGS${COLOR_RESET}
-  ${COLOR_CYAN}--output${COLOR_RESET} <dir>  Output directory ${COLOR_GRAY}(default: ./manufacturing/)${COLOR_RESET}
-  ${COLOR_CYAN}--verbose${COLOR_RESET}       Show detailed verbose output
-  ${COLOR_CYAN}-h, --help${COLOR_RESET}      Show help for command
+  ${COLOR_CYAN}--output${COLOR_RESET} <dir>                 Output directory ${COLOR_GRAY}(gerber-output; default: ./manufacturing/)${COLOR_RESET}
+  ${COLOR_CYAN}--expected-width${COLOR_RESET} <mm>          ${COLOR_GRAY}(verify)${COLOR_RESET} Require this silk line width
+  ${COLOR_CYAN}--expected-text-size${COLOR_RESET} <h[xw]>   ${COLOR_GRAY}(verify)${COLOR_RESET} Require this reference text size
+  ${COLOR_CYAN}--expected-text-thickness${COLOR_RESET} <mm> ${COLOR_GRAY}(verify)${COLOR_RESET} Require this reference text thickness
+  ${COLOR_CYAN}--verbose${COLOR_RESET}                      Show detailed verbose output
+  ${COLOR_CYAN}-h, --help${COLOR_RESET}                     Show help for command
 
 ${COLOR_BOLD}SUPPORTED INPUT FILES${COLOR_RESET}
   ${COLOR_BOLD}.kicad_pcb${COLOR_RESET}    PCB file (looks for matching .kicad_sch for netlist)
@@ -154,6 +197,8 @@ ${COLOR_BOLD}EXAMPLES${COLOR_RESET}
   ${COLOR_GRAY}\$${COLOR_RESET} kicad-shutil pcb gerber-output my_project.kicad_pro
   ${COLOR_GRAY}\$${COLOR_RESET} kicad-shutil pcb gerber-output my_board.kicad_pcb --output /tmp/fab
   ${COLOR_GRAY}\$${COLOR_RESET} kicad-shutil --verbose pcb gerber-output my_board.kicad_pcb
+  ${COLOR_GRAY}\$${COLOR_RESET} kicad-shutil pcb verify my_board.kicad_pcb
+  ${COLOR_GRAY}\$${COLOR_RESET} kicad-shutil pcb verify my_project.kicad_pro --expected-width 0.15
 
 ${COLOR_BOLD}REQUIREMENTS${COLOR_RESET}
   ${COLOR_YELLOW}kicad-cli${COLOR_RESET} (KiCad 7.0 or later) must be installed and available in PATH
@@ -197,6 +242,12 @@ main() {
 			# Symbol library management
 			shift
 			cmd_sym "$@"
+			return $?
+			;;
+		mod)
+			# Footprint silkscreen verification
+			shift
+			cmd_mod "$@"
 			return $?
 			;;
 		pcb)
@@ -500,12 +551,135 @@ process_symbol_file() {
 	fi
 }
 
+# @IMPL-MAIN-007@ (FROM: @ARCH-MAIN-001@, @ARCH-VERIFY-001@)
+# Mod command implementation - verify footprint silkscreen uniformity.
+# Accepts .kicad_mod files, globs, and directories (recursively discovered).
+# The whole discovered set is treated as one library.
+cmd_mod() {
+	local OPT_EXPECTED_WIDTH=""
+	local OPT_EXPECTED_TEXT_SIZE=""
+	local OPT_EXPECTED_TEXT_THICKNESS=""
+	local INPUTS=()
+
+	# Parse arguments
+	while [[ $# -gt 0 ]]; do
+		case "$1" in
+			-h | --help)
+				usage_mod
+				;;
+			--verbose)
+				export VERBOSE=true
+				shift
+				;;
+			--expected-width)
+				OPT_EXPECTED_WIDTH="$2"
+				shift 2
+				;;
+			--expected-text-size)
+				OPT_EXPECTED_TEXT_SIZE="$2"
+				shift 2
+				;;
+			--expected-text-thickness)
+				OPT_EXPECTED_TEXT_THICKNESS="$2"
+				shift 2
+				;;
+			-*)
+				error "Unknown option for 'mod' command: $1"
+				echo "" >&2
+				usage_mod 2
+				;;
+			*)
+				INPUTS+=("$1")
+				shift
+				;;
+		esac
+	done
+
+	if [[ ${#INPUTS[@]} -eq 0 ]]; then
+		error "No input files or directories specified"
+		usage_mod 2
+	fi
+
+	# Resolve inputs: directories are walked recursively, files/globs taken
+	# as-is. Only .kicad_mod files are kept.
+	local FILES=()
+	local item
+	for item in "${INPUTS[@]}"; do
+		if [[ -d "$item" ]]; then
+			while IFS= read -r found; do
+				[[ -n "$found" ]] && FILES+=("$found")
+			done < <(find "$item" -type f -name '*.kicad_mod' 2>/dev/null | sort)
+		elif [[ -f "$item" ]]; then
+			FILES+=("$item")
+		else
+			# Try glob expansion
+			# shellcheck disable=SC2206
+			local matches=($item)
+			if [[ -e "${matches[0]}" ]]; then
+				FILES+=("${matches[@]}")
+			else
+				warn "Not found: $item"
+			fi
+		fi
+	done
+
+	# Keep only .kicad_mod files
+	local valid_files=()
+	local file
+	for file in "${FILES[@]}"; do
+		if [[ "$file" =~ \.kicad_mod$ && -f "$file" ]]; then
+			valid_files+=("$file")
+		fi
+	done
+	FILES=("${valid_files[@]}")
+
+	if [[ ${#FILES[@]} -eq 0 ]]; then
+		error "No .kicad_mod files found in the given inputs"
+		exit 1
+	fi
+
+	# Initialize
+	if ! init_utils; then
+		exit 1
+	fi
+	mkdir -p "$CACHE_DIR"
+
+	# Configure expected-value enforcement (empty = internal-consistency mode)
+	export SILK_EXPECTED_WIDTH="$OPT_EXPECTED_WIDTH"
+	export SILK_EXPECTED_TEXT_SIZE="$OPT_EXPECTED_TEXT_SIZE"
+	export SILK_EXPECTED_TEXT_THICKNESS="$OPT_EXPECTED_TEXT_THICKNESS"
+
+	source "$LIB_DIR/verify_silk.sh"
+	init_silk_stats
+
+	info "kicad-shutil - Checking silkscreen uniformity in ${#FILES[@]} footprint(s)"
+
+	for file in "${FILES[@]}"; do
+		verify_silk_file "$file" "$file"
+	done
+
+	local rc=0
+	evaluate_silk_set || rc=1
+
+	if [[ "${VERBOSE:-false}" == "true" ]]; then
+		print_silk_summary
+	fi
+
+	if [[ $rc -ne 0 ]]; then
+		exit 1
+	fi
+	info "Silkscreen verification complete"
+}
+
 # @IMPL-MAIN-006@ (FROM: @ARCH-MAIN-001@, @ARCH-PCB-001@)
 # PCB command implementation
 cmd_pcb() {
 	local operation=""
 	local output_dir=""
 	local input_file=""
+	local opt_expected_width=""
+	local opt_expected_text_size=""
+	local opt_expected_text_thickness=""
 
 	# Parse arguments
 	while [[ $# -gt 0 ]]; do
@@ -519,6 +693,18 @@ cmd_pcb() {
 				;;
 			--output)
 				output_dir="$2"
+				shift 2
+				;;
+			--expected-width)
+				opt_expected_width="$2"
+				shift 2
+				;;
+			--expected-text-size)
+				opt_expected_text_size="$2"
+				shift 2
+				;;
+			--expected-text-thickness)
+				opt_expected_text_thickness="$2"
 				shift 2
 				;;
 			-*)
@@ -564,13 +750,17 @@ cmd_pcb() {
 	fi
 	mkdir -p "$CACHE_DIR"
 
-	# Source PCB export module
-	source "$LIB_DIR/pcb_export.sh"
-
 	# Route to operation
 	case "$operation" in
 		gerber-output)
+			source "$LIB_DIR/pcb_export.sh"
 			export_gerber_output "$input_file" "$output_dir"
+			;;
+		verify)
+			cmd_pcb_verify "$input_file" \
+				"$opt_expected_width" \
+				"$opt_expected_text_size" \
+				"$opt_expected_text_thickness"
 			;;
 		*)
 			error "Unknown operation: $operation"
@@ -578,6 +768,65 @@ cmd_pcb() {
 			usage_pcb 2
 			;;
 	esac
+}
+
+# @IMPL-MAIN-008@ (FROM: @ARCH-VERIFY-001@, @ARCH-PCB-001@)
+# pcb verify - check silkscreen uniformity of a board.
+# Accepts .kicad_pcb directly, or .kicad_pro/.kicad_sch (derives the
+# sibling .kicad_pcb). The whole board is one set: board-level gr_*
+# graphics and every placed footprint's fp_* silk are checked together.
+cmd_pcb_verify() {
+	local input_file="$1"
+	local exp_w="$2"
+	local exp_ts="$3"
+	local exp_tt="$4"
+
+	# Resolve to a .kicad_pcb file (lightweight; no netlist concerns)
+	local pcb_file=""
+	case "$(basename "$input_file")" in
+		*.kicad_pcb)
+			pcb_file="$input_file"
+			;;
+		*.kicad_pro)
+			pcb_file="${input_file%.kicad_pro}.kicad_pcb"
+			;;
+		*.kicad_sch)
+			pcb_file="${input_file%.kicad_sch}.kicad_pcb"
+			;;
+		*)
+			error "Unsupported file type: $input_file"
+			error "Supported types: .kicad_pcb, .kicad_pro, .kicad_sch"
+			exit 1
+			;;
+	esac
+
+	if [[ ! -f "$pcb_file" ]]; then
+		error "PCB file not found: $pcb_file"
+		exit 1
+	fi
+
+	export SILK_EXPECTED_WIDTH="$exp_w"
+	export SILK_EXPECTED_TEXT_SIZE="$exp_ts"
+	export SILK_EXPECTED_TEXT_THICKNESS="$exp_tt"
+
+	source "$LIB_DIR/verify_silk.sh"
+	init_silk_stats
+
+	info "kicad-shutil - Checking board silkscreen uniformity: $(basename "$pcb_file")"
+
+	verify_silk_file "$pcb_file" "$(basename "$pcb_file")"
+
+	local rc=0
+	evaluate_silk_set || rc=1
+
+	if [[ "${VERBOSE:-false}" == "true" ]]; then
+		print_silk_summary
+	fi
+
+	if [[ $rc -ne 0 ]]; then
+		exit 1
+	fi
+	info "Silkscreen verification complete"
 }
 
 # Run main
