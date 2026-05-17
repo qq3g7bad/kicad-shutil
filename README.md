@@ -1,84 +1,149 @@
 # kicad-shutil
 
-**KiCad Project Helper Utilities** - Shell scripts for managing KiCad projects and libraries
+A single shell script that audits a KiCad **project** against the rules *your
+team* sets for it, enriches its symbol libraries from the **official DigiKey
+API**, and — once the project passes — drives `kicad-cli` to emit a
+manufacturing package. No Python, no Docker, nothing to install.
 
-## ✨ Features
+## Why this exists
 
-### Project Verification
+Two problems, one small tool.
 
-- ✅ **Comprehensive Project Checks** - Verify entire KiCad projects
-  - Validates all library tables (symbols and footprints)
-  - Checks all symbols for missing footprints and datasheets
-  - Verifies all footprints have 3D models
-  - Resolves environment variables (KIPRJMOD, etc.)
+### 1. "Conforms to KLC" is not the question most teams are asking
 
-### Symbol Library Management
+KiCad's official library checks (the KiCad Library Convention) answer one
+question very well: *does this part conform to the global convention?* That is
+exactly the right question when you contribute to the upstream KiCad libraries.
 
-- ✅ **DigiKey Integration** - Automatically fetch part numbers, URLs, and metadata
-  - Stores DigiKey Description in `ki_keywords` property
-  - Stores DigiKey Detailed Description in `ki_description` property
-  - Interactive confirmation when overwriting existing metadata
-- ✅ **Datasheet Download** - Bulk download datasheets for all symbols
-- ✅ **Metadata Validation** - Verify footprints and datasheet links
-- 🔒 **Safe Operations** - Automatic backups before modifications
+It is usually **not** the question a team asks about its own boards. There the
+question is *does this project follow **our** rules* — every symbol resolves to
+a footprint, every footprint to a 3D model that actually exists on disk, every
+part to a datasheet, every library path to something this environment can
+resolve. Those answers depend on *your* libraries, *your* environment
+variables, *your* directory layout — not on any convention, so no globally
+fixed checker can give them. That gap widens as work moves toward enterprise
+scale.
 
-## Quick Start
+kicad-shutil checks that project-scoped question, and ties one consequence to
+it: a fabrication package should never be generated from a project that has not
+passed. The same run that verifies the project drives `kicad-cli` to produce
+the Gerbers, drill, position, netlist and previews — verification and output in
+one ordered pass, or not at all.
+
+### 2. A hardware engineer should not have to fight Python packaging
+
+Most KiCad automation (KiBot, KiCost, kicad-library-utils) is Python. That is
+fine for software engineers. It is increasingly hostile to everyone else:
+current distributions and Homebrew mark the system Python as *externally
+managed* ([PEP 668](https://peps.python.org/pep-0668/)), so `pip install` fails
+— or, worse, a non-expert reaches for `sudo pip` and quietly breaks the system
+interpreter. A hardware engineer who just wants to check a board before sending
+it to fab should not have to learn `venv`, `pipx`, or Docker first.
+
+So kicad-shutil has **no Python and no install step**. It is one Bash script
+plus standard Unix tools, and it runs with the bash Apple still ships on macOS
+(3.2). Clone it, run it. That constraint is the point, not an accident — it is
+what keeps the tool usable on locked-down build servers and by people who do
+not want a toolchain.
+
+## Scope & non-goals
+
+Deliberately small, and honest about its edges:
+
+- **`pcb gerber-output` is a thin convenience, not a product.** It runs
+  `kicad-cli`; it reimplements nothing. KiCad 8+ *jobsets* and
+  [KiBot](https://github.com/INTI-CMNB/KiBot) already do configurable
+  fabrication output well. Use this when you want zero-config output tied to
+  verification in a single command; reach for jobsets or KiBot when you outgrow
+  that. This part is intentionally frozen.
+- **This is not a KLC checker.** For upstream-library conformance use the
+  official [kicad-library-utils](https://gitlab.com/kicad/libraries/kicad-library-utils).
+  It and this tool answer different questions.
+- **This is not a KiBot replacement.** No panelization, no documentation
+  generation, no configuration language.
+
+What it does that those do not: project-instance verification with on-disk and
+environment resolution, and writing DigiKey metadata back into the symbol
+library file itself.
+
+## Features
+
+### Project verification — the core
+
+Resolve the project the way KiCad would, then assert *your* rules hold:
+
+- ✅ Project structure and library tables (`sym-lib-table`, `fp-lib-table`)
+- ✅ Every symbol resolves to a footprint, and that footprint file exists
+- ✅ Every symbol has a datasheet (optionally validates the URL with `--deep`)
+- ✅ Every footprint has a 3D model, and that model file exists on disk
+- ✅ Schematic footprint instances resolve against the library tables
+- ✅ Environment-variable resolution (`KIPRJMOD`, `KICAD7_SYMBOL_DIR`, …)
+- ✅ Silent on success, errors to stderr, clean exit codes — drops into CI
+
+### Symbol library enrichment from DigiKey
+
+The part with no direct equivalent we know of. It pulls part numbers,
+descriptions and datasheet links from the **official DigiKey API** (OAuth2) and
+writes them back **into the `.kicad_sym` library file itself**, in place, with
+automatic backups — not into a BOM at export time, but into the library, so
+every project that uses it inherits the metadata.
+
+- ✅ Stores DigiKey description in `ki_keywords`, detailed description in `ki_description`
+- ✅ Interactive confirmation before overwriting existing fields
+- ✅ Bulk datasheet download
+- 🔒 In-place writes are backed up (`.bak`), written atomically, integrity-checked
+
+### Manufacturing output (convenience wrapper)
+
+Generated only from a verified project. Wraps `kicad-cli` for Gerbers, drill,
+position, netlist, and board previews (3D PNG + 2D SVG). See *Scope &
+non-goals* for when to use jobsets or KiBot instead.
+
+## Prerequisites
+
+- `bash` — no version newer than the macOS system bash (3.2) is required
+- `kicad-cli` — for the `pcb` command (KiCad 7+; 8+ for the 3D preview render)
+- `curl` — for the DigiKey API and datasheet download
+- `awk`, `sed`, `grep` — standard Unix tools
+
+Pre-installed on macOS (built-in), most Linux distributions (built-in), and
+Windows with Git Bash. `kicad-cli` ships with KiCad itself.
+
+## Installation
+
+No build, no packages. Clone and run.
 
 ```bash
 # Clone into your KiCad project directory
 cd /path/to/your/kicad-project
 git clone --recursive https://github.com/qq3g7bad/kicad-shutil.git
-
-# Make executable
 chmod +x ./kicad-shutil/kicad-shutil
 
-# Verify your entire KiCad project
+# Verify your project
 ./kicad-shutil/kicad-shutil project my_project.kicad_pro
-./kicad-shutil/kicad-shutil my_project.kicad_pro  # implicit project command
+```
 
-# With verbose output
+If you forgot `--recursive`, initialize the test submodule:
+
+```bash
+cd kicad-shutil && git submodule update --init --recursive
+```
+
+## Quick Start
+
+```bash
+# Verify an entire project (silent on success; non-zero exit on failure)
+./kicad-shutil/kicad-shutil project my_project.kicad_pro
+./kicad-shutil/kicad-shutil my_project.kicad_pro          # implicit project
+
+# Show what passed, not just what failed
 ./kicad-shutil/kicad-shutil --verbose project my_project.kicad_pro
 
-# Manage symbol libraries
+# Enrich a symbol library from DigiKey (interactive)
 ./kicad-shutil/kicad-shutil sym --update-digikey path/to/library.kicad_sym
-```
 
-## Prerequisites
-
-- `bash` (4.0+)
-- `curl`
-- `awk`, `sed`, `grep` (standard Unix tools)
-
-**All prerequisites are pre-installed on:**
-
-- ✅ macOS (built-in)
-- ✅ Most Linux distributions (built-in)
-- ✅ Windows with Git Bash (included)
-
-## Installation
-
-```bash
-# Clone repository into your KiCad project directory
-cd /path/to/your/kicad-project
-git clone --recursive https://github.com/qq3g7bad/kicad-shutil.git
-
-# Make executable
-chmod +x ./kicad-shutil/kicad-shutil
-
-# Verify installation by running tests
-cd kicad-shutil
-./test/run_tests.sh
-
-# Return to project root and verify your project
-cd ..
-./kicad-shutil/kicad-shutil project my_project.kicad_pro
-```
-
-**Note:** If you forgot `--recursive` during clone, initialize submodules:
-
-```bash
-cd kicad-shutil
-git submodule update --init --recursive
+# Manufacturing output from a verified project
+./kicad-shutil/kicad-shutil pcb gerber-output my_project.kicad_pro
 ```
 
 ## 📄 DigiKey API Setup
@@ -94,20 +159,15 @@ kicad-shutil uses the official DigiKey API for legal and reliable operation.
 
 ### Configure Credentials
 
-**Option 1: Using config file (recommended)**
-
-kicad-shutil automatically sources `~/.kicad-shutil/config` if it exists:
+**Option 1: Config file (recommended)** — sourced from `~/.kicad-shutil/config` if present:
 
 ```bash
-# Create config directory
 mkdir -p ~/.kicad-shutil
-
-# Copy and edit the config template
 cp config.example ~/.kicad-shutil/config
-nano ~/.kicad-shutil/config
+$EDITOR ~/.kicad-shutil/config
 ```
 
-**Option 2: Using environment variables**
+**Option 2: Environment variables**
 
 ```bash
 export DIGIKEY_CLIENT_ID="your-client-id"
@@ -116,51 +176,31 @@ export DIGIKEY_CLIENT_SECRET="your-client-secret"
 
 ## 🚀 Usage
 
-kicad-shutil provides two main subcommands:
-
-**1. Project Verification**
+kicad-shutil provides three subcommands:
 
 ```bash
-kicad-shutil project <file.kicad_pro|directory>
-kicad-shutil <file.kicad_pro>              # implicit project command
-```
-
-**2. Symbol Library Management**
-
-```bash
-kicad-shutil sym [options] <file.kicad_sym>...
+kicad-shutil project <file.kicad_pro|directory>      # verify a project
+kicad-shutil <file.kicad_pro>                        # implicit project
+kicad-shutil sym [options] <file.kicad_sym>...       # symbol libraries
+kicad-shutil pcb gerber-output <pcb|pro|sch>         # manufacturing output
 ```
 
 ### Project Verification
 
-Verify an entire KiCad project and all its libraries:
-
 ```bash
-# Verify project (by file)
+# By file, by directory (finds the .kicad_pro), or implicitly
 ./kicad-shutil/kicad-shutil project my_project.kicad_pro
-./kicad-shutil/kicad-shutil my_project.kicad_pro  # implicit
-
-# Verify project (by directory - finds .kicad_pro automatically)
 ./kicad-shutil/kicad-shutil project ./my_project
+./kicad-shutil/kicad-shutil my_project.kicad_pro
 
-# With verbose output (shows INFO, OK messages, and summaries)
+# Verbose: also show INFO/OK and the summary
 ./kicad-shutil/kicad-shutil --verbose project my_project.kicad_pro
+
+# Deep: also validate datasheet URLs over the network
+./kicad-shutil/kicad-shutil --deep project my_project.kicad_pro
 ```
 
-**What gets checked:**
-
-- ✅ Project structure and library tables (sym-lib-table, fp-lib-table)
-- ✅ All symbol libraries - verifies library files exist
-- ✅ All symbols in symbol libraries for missing footprints
-- ✅ Footprint file existence for each symbol
-- ✅ All footprint libraries - verifies library directories exist
-- ✅ All footprints for missing 3D models
-- ✅ 3D model file existence for each footprint
-- ✅ Environment variable resolution (KIPRJMOD, KICAD7_SYMBOL_DIR, etc.)
-
-**Output Format:**
-
-By default, only errors and warnings are shown :
+**Output.** By default only errors and warnings reach stderr:
 
 ```
 [ERROR] sym-lib CustomLib FILE_NOT_FOUND
@@ -168,119 +208,90 @@ By default, only errors and warnings are shown :
 [ERROR] fp-lib Footprints R_0603 3D_MODEL_FILE_NOT_FOUND
 ```
 
-With `--verbose`, you get detailed output including paths:
+`--verbose` adds resolved paths plus INFO/OK/summary lines:
 
 ```
-[ERROR] sym-lib CustomLib FILE_NOT_FOUND /path/to/CustomLib.kicad_sym
-[WARN] sym-lib MyLib U1 MISSING_FOOTPRINT_FIELD
-[ERROR] fp-lib Footprints R_0603 3D_MODEL_FILE_NOT_FOUND /path/to/model.step
-```
-
-With `--verbose`, you also get INFO, OK, and summary messages:
-
-```
-[ENV]:Loaded 5 KiCad environment variables
-[ENV]:KICAD7_SYMBOL_DIR=/usr/share/kicad/symbols
-[INFO]:Verifying symbol library table:sym-lib-table
-[OK]:sym-lib:Power_Management:/usr/share/kicad/symbols/Power_Management.kicad_sym
+[ENV] Loaded 5 KiCad environment variables
+[INFO] Verifying symbol library table: sym-lib-table
+[OK] sym-lib Power_Management: /usr/share/kicad/symbols/Power_Management.kicad_sym
 ```
 
 ### Symbol Library Management
 
 ```bash
-# Verify symbol library (default operation)
+# Verify (default operation)
 ./kicad-shutil/kicad-shutil sym pmic.kicad_sym
 ./kicad-shutil/kicad-shutil sym --verify *.kicad_sym
 
-# Add/update DigiKey information (interactive)
-./kicad-shutil/kicad-shutil sym --update-digikey pmic.kicad_sym
-./kicad-shutil/kicad-shutil sym -u pmic.kicad_sym
+# Add/update DigiKey metadata (interactive), or remove it
+./kicad-shutil/kicad-shutil sym --update-digikey pmic.kicad_sym   # -u
+./kicad-shutil/kicad-shutil sym --delete-digikey pmic.kicad_sym   # -d
 
-# Remove DigiKey metadata from symbols
-./kicad-shutil/kicad-shutil sym --delete-digikey pmic.kicad_sym
-./kicad-shutil/kicad-shutil sym -d pmic.kicad_sym
-
-# Download all datasheets
-./kicad-shutil/kicad-shutil sym --download-datasheets *.kicad_sym
+# Download datasheets
 ./kicad-shutil/kicad-shutil sym -D *.kicad_sym --to ~/datasheets
 ```
 
+### Manufacturing Output
+
+```bash
+# From a PCB, or a project (auto-detects PCB + schematic)
+./kicad-shutil/kicad-shutil pcb gerber-output my_board.kicad_pcb
+./kicad-shutil/kicad-shutil pcb gerber-output my_project.kicad_pro
+
+# Custom output directory (default: ./manufacturing/)
+./kicad-shutil/kicad-shutil pcb gerber-output my_board.kicad_pcb --output /tmp/fab
+```
+
+Output is organized into `gerbers/`, `drill/`, `position/`, `netlist/`, and
+`preview/` (3D render PNG + 2D layer-composite SVG, front and back).
+
 ### Command Reference
 
-**Global Options:**
+**Global:** `kicad-shutil [--verbose] <command> [options]`
 
-```bash
-kicad-shutil [--verbose] <command> [options]
-```
+| Option | Description |
+|--------|-------------|
+| `--verbose` | Show INFO/OK messages and summaries |
+| `-h, --help` | Show help (per command too) |
+| `-v, --version` | Show version |
 
-- `--verbose` - Show detailed output (INFO, OK messages, summaries)
-- `-h, --help` - Show help message
-- `-v, --version` - Show version information
+**`project [--verbose] [--deep] <file.kicad_pro\|directory>`**
 
-**Project Command:**
+| Option | Description |
+|--------|-------------|
+| `--deep` | Also validate datasheet URLs over the network |
 
-```bash
-kicad-shutil project [options] <file.kicad_pro|directory>
-kicad-shutil <file.kicad_pro>                    # implicit
-```
-
-Options:
-- `--verbose` - Show detailed verbose output
-- `-h, --help` - Show project command help
-
-**Symbol Command:**
-
-```bash
-kicad-shutil sym [options] <file.kicad_sym> [<file2.kicad_sym> ...]
-```
-
-Options:
-- `-v, --verify` - Validate footprints, datasheets (default)
-- `-u, --update-digikey` - Add/update DigiKey metadata
-- `-d, --delete-digikey` - Remove DigiKey metadata
-- `-D, --download-datasheets` - Download all datasheets
-- `-t, --to <dir>` - Target directory for downloads
-- `-h, --help` - Show help message
+**`sym [options] <file.kicad_sym>...`**
 
 | Short | Long | Description |
 |-------|------|-------------|
-| `-u` | `--update-digikey` | Add/update DigiKey part numbers, URLs, and metadata |
-| `-d` | `--delete-digikey` | Remove all DigiKey metadata from symbols |
-| `-v` | `--verify` | Validate footprints and datasheets, show detailed report |
-| `-D` | `--download-datasheets` | Download all datasheets (use `--to <dir>` to specify directory, default: `./datasheets`) |
-| `-h` | `--help` | Show help message |
+| `-v` | `--verify` | Validate footprints and datasheets (default) |
+| `-u` | `--update-digikey` | Add/update DigiKey part numbers, URLs, metadata |
+| `-d` | `--delete-digikey` | Remove all DigiKey metadata |
+| `-D` | `--download-datasheets` | Download all datasheets |
+| `-t` | `--to <dir>` | Target directory for downloads (default: `./datasheets`) |
+
+**`pcb gerber-output [--output <dir>] <file.kicad_pcb\|.kicad_pro\|.kicad_sch>`**
 
 ### Examples
 
-#### Verify Entire Project
+#### Verify a project (CI-style)
 
 ```bash
-# Default (silent on success, errors to stderr)
 $ ./kicad-shutil project my_project.kicad_pro
 [ERROR] sym-lib CustomLib FILE_NOT_FOUND
 [WARN] sym-lib MyLib U1 MISSING_FOOTPRINT_FIELD
 $ echo $?
 1
-
-# With verbose output
-$ ./kicad-shutil --verbose project my_project.kicad_pro
-[INFO] Parsing project file: my_project.kicad_pro
-[INFO] Verifying symbol library table: sym-lib-table
-[OK] sym-lib Power_Management: /usr/share/kicad/symbols/Power_Management.kicad_sym
-[INFO] Verifying footprint library table: fp-lib-table
-[OK] fp-lib Resistor_SMD: /usr/share/kicad/footprints/Resistor_SMD.pretty
-$ echo $?
-0
 ```
 
-#### Update DigiKey Information
+#### Update DigiKey information
 
 ```bash
 $ ./kicad-shutil sym -u pmic.kicad_sym
 
 [INFO] Processing: pmic.kicad_sym
 [INFO]   Processing DigiKey information...
-[INFO]     [TPS63031DSKT] Searching DigiKey for: TPS63031DSKT
 [INFO]     [TPS63031DSKT] Found: TPS63031DSKT-ND
 
 Multiple candidates found for: [LM27762DSST]
@@ -288,174 +299,92 @@ Multiple candidates found for: [LM27762DSST]
  1) LM27762DSST-ND - IC REG BUCK BST ADJ 2.5A
  2) LM27762DSSTRCT-ND - IC REG BUCK BST ADJ 2.5A (Tape & Reel)
 ========================================
- s) Skip this item
- q) Quit
+ s) Skip this item    q) Quit
 
 Select (1-2, s, q): 1
 
 [INFO]     [LM27762DSST] Existing ki_keywords: power regulator
 [INFO]     [LM27762DSST] New ki_keywords (from DigiKey): IC REG BUCK BST ADJ 2.5A
     Overwrite ki_keywords? (y/N): y
-
-[INFO]     [LM27762DSST] Existing ki_description: Buck-boost regulator
-[INFO]     [LM27762DSST] New ki_description (from DigiKey): The LM27762 is a dual-output...
-    Overwrite ki_description? (y/N): n
-[INFO]     [LM27762DSST] Keeping existing ki_description
 [OK]      [LM27762DSST] DigiKey info added: LM27762DSST-ND ($2.50/ea)
-```
-
-#### Download Datasheets
-
-```bash
-# Download datasheets to default directory (./datasheets)
-./kicad-shutil sym --download-datasheets pmic.kicad_sym
-
-# Download to specific directory
-./kicad-shutil sym -D *.kicad_sym --to ~/my_datasheets
 ```
 
 ## Project Structure
 
 ```
 kicad-shutil/
-├── kicad-shutil                # Main executable
+├── kicad-shutil                # Main executable (subcommand routing)
 ├── config.example              # Configuration template
-├── lib/                        # Library modules
-│   ├── parser.sh               # S-expression parser for symbols
-│   ├── parser_project.sh       # JSON parser for projects
-│   ├── parser_footprint.sh     # S-expression parser for footprints
-│   ├── writer.sh               # Property writer
-│   ├── utils.sh                # Utilities
-│   ├── verify.sh               # Verification dispatcher
-│   ├── verify_table.sh         # Library table verification
-│   ├── verify_project.sh       # Project verification
+├── lib/
+│   ├── parser*.sh              # S-expr/JSON parsers (symbol, project,
+│   │                           #   footprint, schematic)
+│   ├── writer.sh               # Atomic property writer with backups
+│   ├── utils.sh                # Logging, caching, config loading
+│   ├── verify*.sh              # Dispatcher + table/project verifiers
+│   ├── pcb_export.sh           # kicad-cli wrappers for manufacturing output
 │   ├── datasheet.sh            # Datasheet download
-│   └── digikey.sh              # DigiKey API integration
-├── cache/                      # API response cache
-├── docs/                       # Documentation
-│   ├── requirements.md         # Requirements specification
-│   ├── design.md               # Architecture and design
-│   ├── shtracer/               # Traceability tool (submodule)
-│   └── traceability/           # Traceability reports
-│       ├── config.md           # Traceability configuration
-│       ├── run_shtracer.sh     # Report generator
-│       └── traceability.html   # Generated report
-└── test/                       # Test suite
-    ├── run_tests.sh            # Test runner
-    ├── test_*.sh               # Unit tests
-    ├── fixtures/               # Test data
-    └── shunit2/                # Test framework (submodule)
+│   └── digikey.sh              # DigiKey API integration (OAuth2)
+├── docs/                       # requirements.md, design.md, traceability/
+└── test/                       # run_tests.sh, test_*.sh, shunit2 (submodule)
 ```
 
 ## Development
 
-### Running Tests
-
 ```bash
-# Ensure submodules are initialized
-git submodule update --init --recursive
-
-# Run all tests
-./test/run_tests.sh
+git submodule update --init --recursive   # first time only
+./test/run_tests.sh                        # run all tests
+shellcheck kicad-shutil lib/*.sh           # lint
 ```
 
-### Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Add tests for new features
-4. Run `./test/run_tests.sh`
-5. Submit a pull request
-
-See [test/README.md](test/README.md) for detailed testing information.
+Contributions: fork, branch, add tests for new behavior, run
+`./test/run_tests.sh`, open a PR. See [test/README.md](test/README.md).
 
 ## How It Works
 
-### S-Expression Parsing
-
-Uses AWK-based state machine to parse KiCad symbol files:
-
-- Identifies symbol boundaries by tracking brace depth
-- Extracts properties while preserving formatting
-- Inserts new properties at correct locations
-
-### Safety Features
-
-- **Automatic backups** - Creates `.bak` files before modifications
-- **Atomic writes** - Uses temporary files to prevent corruption
-- **Validation** - Verifies file integrity after changes
-
-### Caching
-
-- API responses cached for 1 hour
-- Web requests cached for 15 minutes
-- Cache location: `cache/` directory
+- **Parsing.** AWK state machines track S-expression depth (ignoring parens
+  inside quoted strings) to extract symbols/footprints; project files are
+  parsed as JSON. Output is a pipe-delimited intermediate format.
+- **Safety.** File writes create a `.bak`, write via a temp file, verify
+  integrity, and roll back on failure.
+- **Caching.** DigiKey OAuth tokens are cached in memory; API responses are
+  cached on disk under `cache/` to avoid repeat calls.
 
 ## Troubleshooting
 
-### DigiKey API Issues
+**"DigiKey API credentials not found"** — set the environment variables or
+create the config file (see [DigiKey API Setup](#-digikey-api-setup)).
 
-**Error: "DigiKey API credentials not found"**
+**"Failed to obtain DigiKey API token"** — invalid credentials, no network, or
+DigiKey API downtime.
 
-Solution: Set environment variables or create config file (see [DigiKey API Setup](#digikey-api-setup))
-
-**Error: "Failed to obtain DigiKey API token"**
-
-Possible causes:
-
-- Invalid credentials
-- Network connectivity issues
-- DigiKey API service downtime
-
-### Missing Dependencies
-
-**Error: "curl: command not found"**
-
-Install missing tools:
-
-- macOS: `brew install curl`
-- Linux: `sudo apt install curl`
-- Windows: Use Git Bash (includes curl)
+**"kicad-cli not found"** — install KiCad (7+; 8+ for the 3D preview render);
+`kicad-cli` ships with it.
 
 ## License
 
-MIT License - See LICENSE file for details
+MIT — see [LICENSE](LICENSE).
 
 ## Acknowledgments
 
-- [KiCad](https://www.kicad.org/) - Excellent EDA tool
-- [DigiKey](https://www.digikey.com/) - Official API access
-- [shunit2](https://github.com/kward/shunit2) - Shell unit testing framework
-- [Greg Davill](https://github.com/gregdavill) - Whose [kicadScripts](https://github.com/gregdavill/kicadScripts) (`plot_gerbers.py`, `plot_board.py`) inspired the `pcb` manufacturing-output and board-preview features, here reimplemented with kicad-cli
+- [KiCad](https://www.kicad.org/) — the EDA tool and `kicad-cli`, which does
+  all the actual manufacturing-output work
+- [DigiKey](https://www.digikey.com/) — official API access
+- [shunit2](https://github.com/kward/shunit2) — shell unit-testing framework
+- [Greg Davill](https://github.com/gregdavill) — whose
+  [kicadScripts](https://github.com/gregdavill/kicadScripts)
+  (`plot_gerbers.py`, `plot_board.py`) inspired the `pcb` output and
+  board-preview features, here re-expressed as thin `kicad-cli` wrappers
 
 ## 🔗 Requirements Traceability
 
-This project uses [shtracer](https://github.com/qq3g7bad/shtracer) for requirements traceability management.
-
-### Viewing Traceability
+This project uses [shtracer](https://github.com/qq3g7bad/shtracer) for
+requirements traceability.
 
 ```bash
-# Generate HTML report
-cd docs/traceability
-./run_shtracer.sh
-
-# View report
-open traceability.html  # macOS
-xdg-open traceability.html  # Linux
+cd docs/traceability && ./run_shtracer.sh    # generate traceability.html
 ```
 
-### Current Status
-
-The traceability matrix has been fully implemented:
-
-- ✅ **Requirements**: 20 requirement tags defined
-- ✅ **Architecture**: 23 architecture tags defined
-- ✅ **Implementation**: All major public functions tagged with @IMPL-* tags
-- ✅ **Tests**: Sample test tags added to test_parser.sh
-
-**Coverage:**
-- All requirements have corresponding architecture tags
-- All critical functions have implementation tags
-- Test coverage includes unit tests for parsers, verifiers, and utilities
-
-See [docs/requirements.md](docs/requirements.md) and [docs/design.md](docs/design.md) for detailed traceability documentation.
+Requirements, architecture, implementation and tests are tagged with
+`@REQ-*` / `@ARCH-*` / `@IMPL-*` / test tags. See
+[docs/requirements.md](docs/requirements.md) and
+[docs/design.md](docs/design.md).
