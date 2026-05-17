@@ -58,13 +58,16 @@ Deliberately small, and honest about its edges:
   that. This part is intentionally frozen.
 - **This is not a KLC checker.** For upstream-library conformance use the
   official [kicad-library-utils](https://gitlab.com/kicad/libraries/kicad-library-utils).
-  It and this tool answer different questions.
+  It and this tool answer different questions: the silkscreen check below, for
+  instance, asks whether a *set is internally consistent* — not whether it
+  meets an absolute global rule.
 - **This is not a KiBot replacement.** No panelization, no documentation
   generation, no configuration language.
 
 What it does that those do not: project-instance verification with on-disk and
-environment resolution, and writing DigiKey metadata back into the symbol
-library file itself.
+environment resolution, intra-project consistency checks (e.g. silkscreen
+uniformity), and writing DigiKey metadata back into the symbol library file
+itself.
 
 ## Features
 
@@ -79,6 +82,19 @@ Resolve the project the way KiCad would, then assert *your* rules hold:
 - ✅ Schematic footprint instances resolve against the library tables
 - ✅ Environment-variable resolution (`KIPRJMOD`, `KICAD7_SYMBOL_DIR`, …)
 - ✅ Silent on success, errors to stderr, clean exit codes — drops into CI
+
+### Silkscreen consistency
+
+The same thesis applied to the look of the board: a set of footprints (or one
+board) should use **one** silkscreen line width and **one** reference-designator
+text size. Two or more distinct values anywhere in the set is the issue, and
+each value is reported with the files that use it so the outlier is easy to
+find. This is intra-project uniformity, not an absolute KLC rule.
+
+- ✅ `mod` checks `.kicad_mod` files (globs and directories, recursed)
+- ✅ `pcb verify` checks a whole board (`.kicad_pcb` / `.kicad_pro`)
+- ✅ Optional exact enforcement: `--expected-width`, `--expected-text-size`,
+  `--expected-text-thickness`
 
 ### Symbol library enrichment from DigiKey
 
@@ -176,13 +192,15 @@ export DIGIKEY_CLIENT_SECRET="your-client-secret"
 
 ## 🚀 Usage
 
-kicad-shutil provides three subcommands:
+kicad-shutil provides these subcommands:
 
 ```bash
 kicad-shutil project <file.kicad_pro|directory>      # verify a project
 kicad-shutil <file.kicad_pro>                        # implicit project
 kicad-shutil sym [options] <file.kicad_sym>...       # symbol libraries
+kicad-shutil mod [flags] <file.kicad_mod>...         # silkscreen consistency
 kicad-shutil pcb gerber-output <pcb|pro|sch>         # manufacturing output
+kicad-shutil pcb verify [flags] <pcb|pro>            # board silkscreen consistency
 ```
 
 ### Project Verification
@@ -245,6 +263,26 @@ kicad-shutil pcb gerber-output <pcb|pro|sch>         # manufacturing output
 Output is organized into `gerbers/`, `drill/`, `position/`, `netlist/`, and
 `preview/` (3D render PNG + 2D layer-composite SVG, front and back).
 
+### Silkscreen Consistency
+
+```bash
+# Footprints: one file, a glob, or a directory (recursed for .kicad_mod)
+./kicad-shutil/kicad-shutil mod R_0402.kicad_mod
+./kicad-shutil/kicad-shutil mod ./footprints/
+./kicad-shutil/kicad-shutil --verbose mod *.kicad_mod      # show every value found
+
+# Enforce exact values instead of just internal consistency
+./kicad-shutil/kicad-shutil mod --expected-width 0.15 --expected-text-size 1x1 *.kicad_mod
+
+# A whole board
+./kicad-shutil/kicad-shutil pcb verify my_board.kicad_pcb
+./kicad-shutil/kicad-shutil pcb verify my_project.kicad_pro --expected-width 0.15
+```
+
+By default each input only needs to be internally consistent (the actual value
+may differ between files) and a cross-file summary is printed; `--expected-*`
+turns it into an exact-value gate.
+
 ### Command Reference
 
 **Global:** `kicad-shutil [--verbose] <command> [options]`
@@ -271,7 +309,19 @@ Output is organized into `gerbers/`, `drill/`, `position/`, `netlist/`, and
 | `-D` | `--download-datasheets` | Download all datasheets |
 | `-t` | `--to <dir>` | Target directory for downloads (default: `./datasheets`) |
 
+**`mod [flags] <file.kicad_mod>...`** (also accepts globs and directories)
+
+| Flag | Description |
+|------|-------------|
+| `--expected-width <mm>` | Require this silk line width (e.g. `0.15`) |
+| `--expected-text-size <h[xw]>` | Require this reference text size (e.g. `1` or `1x1`) |
+| `--expected-text-thickness <mm>` | Require this reference text thickness |
+| `--verbose` | Show every distinct value found |
+
 **`pcb gerber-output [--output <dir>] <file.kicad_pcb\|.kicad_pro\|.kicad_sch>`**
+
+**`pcb verify [--expected-* …] <file.kicad_pcb\|.kicad_pro>`** — same
+`--expected-*` flags as `mod`, applied to a whole board.
 
 ### Examples
 
@@ -317,10 +367,10 @@ kicad-shutil/
 ├── config.example              # Configuration template
 ├── lib/
 │   ├── parser*.sh              # S-expr/JSON parsers (symbol, project,
-│   │                           #   footprint, schematic)
+│   │                           #   footprint, schematic, silk)
 │   ├── writer.sh               # Atomic property writer with backups
 │   ├── utils.sh                # Logging, caching, config loading
-│   ├── verify*.sh              # Dispatcher + table/project verifiers
+│   ├── verify*.sh              # Dispatcher + table/project/silk verifiers
 │   ├── pcb_export.sh           # kicad-cli wrappers for manufacturing output
 │   ├── datasheet.sh            # Datasheet download
 │   └── digikey.sh              # DigiKey API integration (OAuth2)
